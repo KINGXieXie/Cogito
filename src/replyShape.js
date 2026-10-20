@@ -87,6 +87,19 @@ export function pickLineCount(targetLen, { maxLines = 3, lineMaxChars = 40, rand
 }
 
 /**
+ * 判断型 / 分析型提问：问 MBTI、性格、星座、评价、建议、原因这类"要你先给依据、
+ * 再下结论"的问题。这类问题允许比"跟着对方长度走"多出一两行，但仍然不是长段落。
+ * 只做粗筛：命中了只是把形态放宽，语气和人设完全不受影响。
+ */
+export function asksForAnalysis(text) {
+  const s = String(text ?? '').trim()
+  if (!s) return false
+  if (/mbti/i.test(s) || /(?:星座|人格测试|心理测试|性格测试)/.test(s)) return true
+  const question = /[?？]|吗|呢|什么|怎么样|如何|为什么|为啥|该不该|要不要|怎么办|是不是|会不会/.test(s)
+  return question && /(?:性格|人格|心理|分析|评价|判断|建议|适合|类型|为什么|为啥|该不该|要不要|怎么办)/.test(s)
+}
+
+/**
  * 规划本次回复的形态。
  * @returns {{targetLen:number, lines:number, budget:number, perLineCap:number, lineMaxChars:number}}
  *   targetLen    本次希望的总字数（对方长度 + 未回消息折算）
@@ -101,6 +114,7 @@ export function planReply({
   lineMaxChars = 40,
   matchEnabled = true,
   longForm = false,
+  analysis = false,
   backlogWeight = 0.35,
   rand = Math.random,
 } = {}) {
@@ -111,6 +125,14 @@ export function planReply({
     return { targetLen: full, lines: maxLines, budget: full, perLineCap: lineMaxChars, lineMaxChars, longForm: true }
   }
   const target = Math.max(0, Math.round(incomingLen + backlogLen * backlogWeight))
+  // 判断/分析型提问：对方问一句「我 MBTI 是什么」，一行装不下"依据 + 结论"。
+  // 给 2 行（问得长时 3 行）和一点额外预算，输出仍然按聊天尺度收着，不写成长段落。
+  if (analysis && maxLines > 1) {
+    const lines = Math.min(maxLines, target >= lineMaxChars * 1.2 ? 3 : 2)
+    const budget = Math.max(36, Math.min(lines * lineMaxChars, Math.round(target * 0.7) + 42))
+    const perLineCap = Math.max(10, Math.min(lineMaxChars, Math.round(budget / lines) + 8))
+    return { targetLen: target, lines, budget, perLineCap, lineMaxChars, analysis: true }
+  }
   const lines = matchEnabled ? pickLineCount(target, { maxLines, lineMaxChars, rand }) : 1
   // 预算：跟着对方长度走，再给几个字余量；下限 8 字（避免出现"嗯"这种没有信息的回复），
   // 上限 = 行数 × 单行上限（多行不代表可以无限长）
@@ -237,7 +259,12 @@ export function shapeReply(raw, plan) {
 
   if (lines.length === 0) return fallback()
   if (lines.length === 1 && maxLines > 1) {
-    const split = splitOneLine(lines[0], maxLines, lineCap)
+    // 分析型提问要求"先依据、后结论"分成两条消息发出：模型把两句写成一行时，
+    // 即便整行没超单行上限也要按句末标点拆开（只拆多句，一句话仍是一条）。
+    const cap = plan?.analysis
+      ? Math.min(lineCap, Math.max(12, Math.ceil(contentLength(lines[0]) * 0.6)))
+      : lineCap
+    const split = splitOneLine(lines[0], maxLines, cap)
     if (split.length > 1 && split.every((s) => s.length > 0)) lines = split
   }
   if (lines.length > maxLines) {
@@ -298,6 +325,12 @@ export function ensureDecoration(lines, sourceText, { kind = 'persona', rand = M
 export function shapeHint(plan) {
   const { targetLen, lines, budget, lineMaxChars } = plan
   const perLine = Math.max(4, Math.min(lineMaxChars, Math.round(budget / Math.max(1, lines))))
+  if (plan.analysis) {
+    // 判断/分析型提问：要求"先依据、后结论"，而不是把结论埋在一行里或展开成长段落
+    const lo = Math.max(6, Math.round((budget / lines) * 0.6))
+    const totalLo = lo * lines
+    return `\n\n【本次回复的形态要求（系统自动生成，绝不要提及它）】对方在问你一件需要你判断/分析的事（比如他的 MBTI、性格、看法、建议）。请分成 ${lines} 行写（用换行分隔）：前面的行先给一句依据或分析，最后一行再单独给结论（例如"所以我猜你是 XX"）；每行 ${lo}~${perLine} 字、整体 ${totalLo}~${budget} 字。用你平时说话的语气，不要编号、不要列表、不要复述题目，也不要写成长段落、小作文或分点讲解——每一行都要能单独作为一条消息发出去，最后一行的结论必须明确。`
+  }
   if (lines <= 1) {
     const lo = Math.max(3, Math.round(budget * 0.6))
     return `\n\n【本次回复的形态要求（系统自动生成，绝不要提及它）】对方这条消息大约 ${targetLen} 字。请你也用差不多的长度回：一行写完，${lo}~${budget} 字（不超过 ${lineMaxChars} 字），像微信/QQ 里随口接一句话那样自然。`

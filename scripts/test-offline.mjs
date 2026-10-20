@@ -14,6 +14,7 @@ const scripts = [
   'test-summary-capture.mjs',
   'test-vision-knowledge.mjs',
   'test-reply-metadata.mjs',
+  'test-reply-analysis.mjs',
   'test-persona-memory.mjs',
   'test-long-memory-budget.mjs',
   'test-private-profiles.mjs',
