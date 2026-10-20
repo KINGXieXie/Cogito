@@ -95,12 +95,23 @@ try {
     assert.equal(await a, true); assert.equal(await b, true); assert.equal(calls, 1)
     assert.equal(t.longMemory.snapshot().chats.g1.pending[0].text, '第二条')
   })
-  await test('失败或超长摘要不覆盖旧记忆，也不删除队列原文', async () => {
+  await test('超长摘要压缩/截断到预算并推进队列；空摘要或模型报错才保留旧记忆与队列原文', async () => {
     const t = fixture({ async chat() { return '字'.repeat(1501) } })
     t.longMemory.addEvicted('g1', [{ text: '完整待处理原话' }])
-    assert.equal(await t.longMemory.summarize('g1'), false)
-    assert.equal(t.longMemory.snapshot().chats.g1.pending[0].text, '完整待处理原话')
-    assert.equal(t.longMemory.get('g1'), '')
+    assert.equal(await t.longMemory.summarize('g1'), true)
+    assert.equal(t.longMemory.snapshot().chats.g1.summary.length, 1500)
+    assert.deepEqual(t.longMemory.snapshot().chats.g1.pending, [])
+
+    const empty = fixture({ async chat() { return '' } })
+    empty.longMemory.addEvicted('g1', [{ text: '完整待处理原话' }])
+    assert.equal(await empty.longMemory.summarize('g1'), false)
+    assert.equal(empty.longMemory.snapshot().chats.g1.pending[0].text, '完整待处理原话')
+    assert.equal(empty.longMemory.get('g1'), '')
+
+    const broken = fixture({ async chat() { throw Error('模型不可用') } })
+    broken.longMemory.addEvicted('g1', [{ text: '完整待处理原话' }])
+    assert.equal(await broken.longMemory.summarize('g1'), false)
+    assert.equal(broken.longMemory.snapshot().chats.g1.pending[0].text, '完整待处理原话')
   })
   await test('超出150字的关键细节仍归档、检索并在重启后可找回；群之间隔离', async () => {
     let input = ''; const t = fixture({ async chat(p, messages) { input = messages[0].content; return '摘要没有记下那条约定' } })
