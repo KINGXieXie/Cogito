@@ -100,9 +100,16 @@ export function planReply({
   maxLines = 3,
   lineMaxChars = 40,
   matchEnabled = true,
+  longForm = false,
   backlogWeight = 0.35,
   rand = Math.random,
 } = {}) {
+  // 明确要求长内容（背诗 / 逐条列 / 完整讲）时不受"跟着对方长度走"的压制：
+  // 目标给满 maxLines × 单行上限，行数给足，保证一句一行、按条发出。
+  if (longForm) {
+    const full = Math.max(lineMaxChars, maxLines * lineMaxChars)
+    return { targetLen: full, lines: maxLines, budget: full, perLineCap: lineMaxChars, lineMaxChars, longForm: true }
+  }
   const target = Math.max(0, Math.round(incomingLen + backlogLen * backlogWeight))
   const lines = matchEnabled ? pickLineCount(target, { maxLines, lineMaxChars, rand }) : 1
   // 预算：跟着对方长度走，再给几个字余量；下限 8 字（避免出现"嗯"这种没有信息的回复），

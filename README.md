@@ -1,6 +1,8 @@
-# Koukou · QQ 机器人与 Koukou Studio
+# Cogito · QQ 机器人与 Cogito Studio
 
 基于 Node.js 和 OneBot 11 的 QQ 聊天机器人，包含网页控制台、Windows 桌面入口和 NapCat 启动中心。使用 Node.js 内置模块，无需安装 npm 运行依赖。新安装使用通用助手人格，不附带个人角色、专属语料或识图标注。
+
+> 本项目基于 [KimBrine/Koukou-bot](https://github.com/KimBrine/Koukou-bot) 修改，遵循 MIT 协议；控制台已本地化为 Cogito Studio。
 
 社区贡献：已合并 [yemuxi520/Koukou-bot](https://github.com/yemuxi520/Koukou-bot) 的管理员、自定义指令、会话人格、记忆管理和可选 LLBot 启动功能，并补充记忆隔离、跨群保护与定时发送回执。
 

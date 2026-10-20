@@ -285,6 +285,9 @@ const SEARCH_TOOLS = [{
   },
 }]
 
+// 明确的"长内容"请求：背诗、念课文、逐条列、完整讲——这类不受长度匹配压制。
+const LONG_FORM_RE = /背(?:一首|首|诗|课文|一段)|念(?:一首|首诗|诗)|朗诵|来一首|写一首|逐条|一条一条|每行(?:一|只|一句)|依次列出|完整地?(?:说|讲|列)/
+
 export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt, dailySummary, dailyPing, webSearch, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory, rand = Math.random }) {
   const imageCache = sharedImageCache ?? (config.dataDir && config.visionCacheEnabled !== false ? createImageCache({
     dir: path.join(config.dataDir, 'image-cache'),
@@ -1012,6 +1015,7 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         maxLines: eff?.replyMaxLines ?? config.replyMaxLines,
         lineMaxChars: eff?.lineMaxChars ?? config.replyLineMaxChars,
         matchEnabled: config.replyLengthMatch,
+        longForm: LONG_FORM_RE.test(parsed.text),
         rand, // 可注入的随机源（生产为 Math.random，测试可固定以保证确定性）
       })
       logger.debug(`[形态] 对方 ${incomingLen} 字 → 目标 ${plan.targetLen} 字｜${plan.lines} 行｜预算 ${plan.budget} 字`)
