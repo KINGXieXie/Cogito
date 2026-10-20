@@ -180,7 +180,7 @@ function validateGroupConfig(key, value) {
   }
 }
 
-export function createAdminServer({ config, logger, onebot, memory, chatSettings, dailySummary, targetWatch, longMemory, runtimeStats, dailyPing, bot, customCommands, commandCenter, restartBot }) {
+export function createAdminServer({ config, logger, onebot, memory, chatSettings, dailySummary, targetWatch, longMemory, runtimeStats, dailyPing, bot, customCommands, commandCenter, restartBot, usageMeter }) {
   // 本实例自己的 .env（并行跑两个实例时，写死 rootDir\.env 会改到另一个实例的配置上）
   const envFile = config.envFile || path.join(config.rootDir, '.env')
   const logFile = path.join(config.logDir || path.join(config.rootDir, 'logs'), 'bot.log')
@@ -333,6 +333,7 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
     if (runtimeStats?.replies) for (const [k, v] of runtimeStats.replies) replyStats[k] = v
     return {
       now: Date.now(),
+      usage: usageMeter?.summary?.() ?? null,
       pid: process.pid,
       uptimeSec: Math.round((Date.now() - (runtimeStats?.startedAt ?? Date.now())) / 1000),
       bot: {

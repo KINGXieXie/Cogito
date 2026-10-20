@@ -15,7 +15,7 @@ export const isQwenHybridModel = model => /^qwen(?:3(?:\.\d+)?-(?:flash|plus|vl-
  * - chatRaw() 支持函数调用（tools），返回 content 与 tool_calls。
  */
 export class DeepSeekClient {
-  constructor({ apiKey, baseUrl, model, temperature, maxTokens, timeoutMs, maxRetries, maxConcurrency, logger, label = '模型接口', enableThinking }) {
+  constructor({ apiKey, baseUrl, model, temperature, maxTokens, timeoutMs, maxRetries, maxConcurrency, logger, label = '模型接口', enableThinking, usageMeter = null }) {
     this.apiKey = apiKey
     this.baseUrl = baseUrl
     this.model = model
@@ -29,6 +29,7 @@ export class DeepSeekClient {
     this.active = 0
     this.queue = []
     this.concurrencyLimit = maxConcurrency
+    this.usageMeter = usageMeter
   }
 
   async #acquire(signal) {
@@ -209,7 +210,10 @@ export class DeepSeekClient {
           throw err
         }
         // 超时覆盖响应正文读取；收到 HTTP 头不代表模型已经输出完毕。
-        return await res.json()
+        const data = await res.json()
+        // token 记账：失败也不影响回复本身
+        try { this.usageMeter?.record({ model: body?.model || this.model, usage: data?.usage, label: this.label }) } catch { /* ignore */ }
+        return data
       } catch (err) {
         clearTimeout(timer)
         // 单群总时限取消时终止请求与重试，不占住其他群的生成位置。

@@ -304,6 +304,7 @@ function pageOverview(){
     return adminCard + `
   <div class="hero"><span class="hero-status">${dot(b.online === true)} ${accountStatusText(b)}</span>
     <h1>机器人工作台</h1><div class="sub"><span id="updatedAt">${new Date().toLocaleTimeString('zh-CN',{hour12:false})}</span> 更新 · 集中管理运行状态与操作</div></div>
+  <div class="note" style="margin:6px 0 12px">${state?.usage?.today ? `今日模型花费 ¥${Number(state.usage.today.cost).toFixed(2)} · ${state.usage.today.calls} 次调用 · 近 7 天 ¥${Number(state.usage.recentCost).toFixed(2)}（本地估算）` : ''}</div>
   <div class="grid g3">${cards.map(([k,v,s]) => `<div class="card"><h3>${k}</h3><div class="kpi">${v}</div><div class="note">${s||''}</div></div>`).join('')}</div>
   <div class="section-head"><h2>常用操作</h2><span class="note">操作作用于当前机器人</span></div>
   <div class="card">

@@ -24,6 +24,7 @@ import { createDailyPing } from './dailyPing.js'
 import { createAdminServer } from './admin/server.js'
 import { createRateLimiter } from './humanize.js'
 import { createChatPromptBuilder } from './chatPrompt.js'
+import { createUsageMeter } from './usageMeter.js'
 
 const config = loadConfig()
 const logger = createLogger(config.logLevel, config.logFile)
@@ -109,6 +110,7 @@ try {
   /* 锁文件写入失败不影响运行 */
 }
 
+const usageMeter = createUsageMeter({ file: path.join(config.dataDir, 'usage.json'), logger })
 const memory = new MemoryStore({ file: config.memoryFile, limit: config.historyLimit, logger })
 memory.load()
 
@@ -123,6 +125,7 @@ const llm = new DeepSeekClient({
   maxConcurrency: config.maxConcurrency,
   logger,
   label: 'DeepSeek',
+  usageMeter,
 })
 
 // 视觉模型：消息带图片/表情包时先把图读成文字描述，再交给对话模型写人设回复。
@@ -143,6 +146,7 @@ if (config.visionProvider === 'deepseek' ? config.deepseekApiKey : config.dashsc
     temperature: config.temperature,
     // 识图回复硬性限长：真人看到表情包只会随口吐槽一两句，不需要长篇分析
     maxTokens: Math.min(config.maxTokens, 300),
+    usageMeter,
     timeoutMs: config.timeoutMs,
     maxRetries: config.maxRetries,
     maxConcurrency: config.maxConcurrency,
@@ -166,6 +170,7 @@ const summaryLLM = new DeepSeekClient({
   maxRetries: config.maxRetries,
   maxConcurrency: config.summaryConcurrency,
   logger,
+  usageMeter,
   label: useQwenForSummary ? '总结模型(通义千问)' : '总结模型(DeepSeek)',
   enableThinking: useQwenForSummary && isQwenHybridModel(config.summaryModel) ? config.dashscopeThinking : undefined,
 })
@@ -188,7 +193,7 @@ const memoryLLM = new DeepSeekClient({
   apiKey: summaryLLM.apiKey, baseUrl: summaryLLM.baseUrl, model: summaryLLM.model,
   temperature: summaryLLM.temperature, maxTokens: summaryLLM.maxTokens,
   timeoutMs: summaryLLM.timeoutMs, maxRetries: summaryLLM.maxRetries, maxConcurrency: 1,
-  enableThinking: summaryLLM.enableThinking, logger, label: '长期记忆模型',
+  enableThinking: summaryLLM.enableThinking, logger, label: '长期记忆模型', usageMeter,
 })
 const longMemory = createLongMemory({
   file: path.join(config.dataDir, 'long-memory.json'),
@@ -287,6 +292,7 @@ if (config.adminEnabled) {
     bot,
     customCommands,
     commandCenter,
+    usageMeter,
     restartBot: () => {
       // 让一个独立进程在 1.2 秒后杀掉当前实例并用计划任务重新拉起（避免自己杀自己杀不干净）
       //
