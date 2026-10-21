@@ -134,10 +134,11 @@ export function planReply({
     return { targetLen: target, lines, budget, perLineCap, lineMaxChars, analysis: true }
   }
   const lines = matchEnabled ? pickLineCount(target, { maxLines, lineMaxChars, rand }) : 1
-  // 预算：跟着对方长度走，再留一点余量让回复能带出具体细节/自己的反应（别只回一个词）。
-  // 下限 8 字；上限 = 行数 × 单行上限（多行不代表可以无限长）。
-  const budget = Math.max(8, Math.min(lines * lineMaxChars, Math.round(target * 1.15) + 12))
-  const perLineCap = Math.max(8, Math.min(lineMaxChars, Math.ceil(budget / lines) + 6))
+  // 预算：跟着对方长度走，再留一点余量让回复能带出具体细节/自己的反应。
+  // 极短输入（"在吗""嗯"）少给余量——真人这时候往往只回一两个字，不该永远比对方说得多。
+  const surplus = target <= 8 ? 6 : 12
+  const budget = Math.max(4, Math.min(lines * lineMaxChars, Math.round(target * 1.15) + surplus))
+  const perLineCap = Math.max(4, Math.min(lineMaxChars, Math.ceil(budget / lines) + 6))
   return { targetLen: target, lines, budget, perLineCap, lineMaxChars }
 }
 
@@ -278,10 +279,14 @@ export function shapeReply(raw, plan) {
 
   // 总预算同样只算正文，装饰符号白送（否则短回复里 🍥/颜文字永远第一个被丢掉）
   let total = contentLength(lines.join(''))
-  for (let i = lines.length - 1; i >= 0 && total > budget; i--) {
-    const allow = Math.max(4, budget - (total - contentLength(lines[i])))
-    lines[i] = trimTo(lines[i], allow + decorationChars(lines[i]))
-    total = contentLength(lines.join(''))
+  // 只超一点点（≤6 字）就不动刀：把"唔…累的话，先坐下歇会儿"裁成"唔…累的话"反而更像机器人。
+  // 真人宁可多说几个字，也不会为了对齐预算把一句话砍断。
+  if (total - budget > 6) {
+    for (let i = lines.length - 1; i >= 0 && total > budget; i--) {
+      const allow = Math.max(4, budget - (total - contentLength(lines[i])))
+      lines[i] = trimTo(lines[i], allow + decorationChars(lines[i]))
+      total = contentLength(lines.join(''))
+    }
   }
   const out = lines.filter((s) => s && s.trim().length > 0)
   return out.length > 0 ? out : fallback()
@@ -332,8 +337,8 @@ export function shapeHint(plan) {
     return `\n\n【本次回复的形态要求（系统自动生成，绝不要提及它）】对方在问你一件需要你判断/分析的事（比如他的 MBTI、性格、看法、建议）。请分成 ${lines} 行写（用换行分隔）：前面的行先给一句依据或分析，最后一行再单独给结论（例如"所以我猜你是 XX"）；每行 ${lo}~${perLine} 字、整体 ${totalLo}~${budget} 字。用你平时说话的语气，不要编号、不要列表、不要复述题目，也不要写成长段落、小作文或分点讲解——每一行都要能单独作为一条消息发出去，最后一行的结论必须明确。`
   }
   if (lines <= 1) {
-    const lo = Math.max(3, Math.round(budget * 0.6))
-    return `\n\n【本次回复的形态要求（系统自动生成，绝不要提及它）】对方这条消息大约 ${targetLen} 字。请你也用差不多的长度回：一行写完，${lo}~${budget} 字（不超过 ${lineMaxChars} 字），像微信/QQ 里随口接一句话那样自然。`
+    // 短消息不写成"凑字数"：先接话，再给一个具体的点；没什么可说时一两个字也行
+    return `\n\n【本次回复的形态要求（系统自动生成，绝不要提及它）】对方这条消息大约 ${targetLen} 字。一行写完就够了（${budget} 字以内）：先接住他的话，再给一个具体的点——一个细节、一点自己的判断或情绪；没什么可说的时候，一两个字也行（"在""嗯？"），别为了凑长度加空话。`
   }
   // 关键是给出"目标区间"而不是"上限"：只说上限，模型会理解成"尽量短"，长度就跟不上对方
   const lo = Math.max(4, Math.round((budget / lines) * 0.7))

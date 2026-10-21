@@ -47,6 +47,17 @@ assert.ok(lines.length >= 2, '应拆成多条')
 assert.ok(lines.join('').length <= short.budget + 8, '总长不超预算')
 assert.ok(lines[lines.length - 1].includes('INFP'), '结论在最后一条')
 
+// 7) 极短输入不再硬给余量：允许一两个字回复，避免"永远比对方说得多"
+const tiny = planReply({ incomingLen: 2, maxLines: 10, lineMaxChars: 40, matchEnabled: true })
+assert.ok(tiny.budget <= 12, `极短输入预算应紧一点，当前 ${tiny.budget}`)
+assert.ok(shapeHint(tiny).includes('一两个字也行'), '提示要给极短回复留口子')
+
+// 8) 只超一点点不裁：宁可多几个字，也不要把半句砍断
+const tolerantPlan = { lines: 1, budget: 8, perLineCap: 18, lineMaxChars: 40 }
+assert.deepEqual(shapeReply('唔…累的话，先坐下歇会儿。', tolerantPlan), ['唔…累的话，先坐下歇会儿。'])
+const overflowPlan = { lines: 1, budget: 8, perLineCap: 40, lineMaxChars: 40 }
+assert.ok(shapeReply('这句明明超预算很多很多很多很多很多很多人', overflowPlan)[0].length < 30, '超太多仍要裁')
+
 // 7) 明确要求长内容时 longForm 优先于分析形态
 assert.equal(planReply({ incomingLen: 10, maxLines: 5, lineMaxChars: 40, analysis: true, longForm: true }).longForm, true)
 
