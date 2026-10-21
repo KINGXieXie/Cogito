@@ -38,7 +38,7 @@ export function readWebuiSettings(file) {
     const token = String(raw?.token || '').trim()
     if (!token) return null
     const port = Number(raw?.port) || 6099
-    return { token, port, host: String(raw?.host || '') }
+    return { token, port, host: String(raw?.host || ''), autoLoginAccount: String(raw?.autoLoginAccount || '').trim() }
   } catch {
     return null
   }
@@ -117,7 +117,17 @@ export async function loginSnapshot({ napcatDir, fetchImpl = fetch, timeoutMs = 
   const settings = readWebuiSettings(configFile)
   if (!settings) return { configured: false, reachable: false, error: 'webui.json 里没有 token' }
 
-  const snapshot = { configured: true, reachable: true, isLogin: false, uin: '', phase: '', accounts: [], qr: readQrImage(findQrImage(dir)) }
+  const snapshot = {
+    configured: true,
+    reachable: true,
+    isLogin: false,
+    uin: '',
+    phase: '',
+    // 机器人自己的账号：UI 用它把"你的主号"和"机器人号"分开，避免一键登错号
+    expectedUin: settings.autoLoginAccount,
+    accounts: [],
+    qr: readQrImage(findQrImage(dir)),
+  }
   try {
     const status = await napcatCall({ port: settings.port, token: settings.token, pathname: '/api/QQLogin/CheckLoginStatus', fetchImpl, timeoutMs })
     snapshot.isLogin = Boolean(status?.isLogin)
@@ -125,12 +135,16 @@ export async function loginSnapshot({ napcatDir, fetchImpl = fetch, timeoutMs = 
     snapshot.uin = String(status?.uin || '')
     if (!snapshot.isLogin) {
       const list = await napcatCall({ port: settings.port, token: settings.token, pathname: '/api/QQLogin/GetQuickLoginListNew', fetchImpl, timeoutMs }).catch(() => [])
-      snapshot.accounts = (Array.isArray(list) ? list : []).map((item) => ({
-        uin: String(item?.uin || ''),
-        nickName: String(item?.nickName || ''),
-        isQuickLogin: item?.isQuickLogin === true,
-        isAutoLogin: item?.isAutoLogin === true,
-      })).filter((item) => item.uin)
+      snapshot.accounts = (Array.isArray(list) ? list : []).map((item) => {
+        const uin = String(item?.uin || '')
+        return {
+          uin,
+          nickName: String(item?.nickName || ''),
+          isQuickLogin: item?.isQuickLogin === true,
+          isAutoLogin: item?.isAutoLogin === true,
+          isBotAccount: Boolean(snapshot.expectedUin) && uin === snapshot.expectedUin,
+        }
+      }).filter((item) => item.uin)
     }
   } catch (err) {
     snapshot.reachable = false

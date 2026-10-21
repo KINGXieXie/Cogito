@@ -22,14 +22,15 @@ const cacheDir = path.join(versionDir, 'cache')
 mkdirSync(configDir, { recursive: true })
 mkdirSync(cacheDir, { recursive: true })
 const webuiFile = path.join(configDir, 'webui.json')
-writeFileSync(webuiFile, JSON.stringify({ host: '::', port: 6099, token: TOKEN }), 'utf8')
+writeFileSync(webuiFile, JSON.stringify({ host: '::', port: 6099, token: TOKEN, autoLoginAccount: '3755578205' }), 'utf8')
 
 try {
-  // 2) 能在安装目录里找到 webui.json 并读出端口/token
+  // 2) 能在安装目录里找到 webui.json 并读出端口/token/机器人账号
   assert.equal(findWebuiConfig(dir), webuiFile)
   const settings = readWebuiSettings(webuiFile)
   assert.equal(settings.token, TOKEN)
   assert.equal(settings.port, 6099)
+  assert.equal(settings.autoLoginAccount, '3755578205')
   assert.equal(readWebuiSettings(path.join(dir, 'nope.json')), null)
 
   // 3) 二维码图片：识别 PNG/JPEG，坏文件返回 null
@@ -81,9 +82,12 @@ try {
     }),
   })
   assert.equal(offline.isLogin, false)
+  assert.equal(offline.expectedUin, '3755578205', '要带上机器人账号，界面才能区分主号和机器人号')
   assert.equal(offline.accounts.length, 2)
   assert.equal(offline.accounts[0].uin, '3755578205')
   assert.equal(offline.accounts[0].isAutoLogin, true)
+  assert.equal(offline.accounts[0].isBotAccount, true)
+  assert.equal(offline.accounts[1].isBotAccount, false, '主号不能被当成机器人账号')
 
   // 6) NapCat 不可达时不抛异常，返回可读错误
   const broken = await loginSnapshot({

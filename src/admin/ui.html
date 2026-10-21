@@ -587,7 +587,8 @@ function paintLogin(s){
     return
   }
   st.innerHTML = (s.isLogin ? '<span class="pill">已登录</span>' : '<span class="pill">等待扫码</span>') +
-    '<span class="mut" style="margin-left:8px">账号 ' + esc(s.uin || '—') + (s.phase ? ' · ' + esc(s.phase) : '') + '</span>'
+    '<span class="mut" style="margin-left:8px">账号 ' + esc(s.uin || '—') + (s.phase ? ' · ' + esc(s.phase) : '') +
+    (s.expectedUin ? ' · 机器人账号 ' + esc(s.expectedUin) : '') + '</span>'
   const qrBox = document.getElementById('loginQrBox')
   if (s.isLogin) qrBox.innerHTML = '<div class="note">机器人已登录，不需要扫码。想换号或强制重新登录，点「重启 NapCat」，重启后二维码会出现在这里。</div>'
   else if (s.qr && s.qr.dataUrl) qrBox.innerHTML = '<img alt="QQ 登录二维码" src="' + s.qr.dataUrl + '" style="width:220px;height:220px;display:block;background:#fff;border-radius:12px;padding:8px">'
@@ -596,11 +597,19 @@ function paintLogin(s){
   const acc = document.getElementById('loginAccounts')
   const list = Array.isArray(s.accounts) ? s.accounts : []
   acc.innerHTML = list.length ? list.map(a =>
-    '<div class="row"><span>' + esc(a.nickName || a.uin) + ' <span class="mut">' + esc(a.uin) + (a.isAutoLogin ? ' · 自动登录' : '') + '</span></span>' +
-    '<button class="btn sm" data-quick="' + esc(a.uin) + '">快速登录</button></div>').join('') :
+    '<div class="row"><span>' + esc(a.nickName || a.uin) + ' <span class="mut">' + esc(a.uin) + (a.isAutoLogin ? ' · 自动登录' : '') + '</span>' +
+    (a.isBotAccount ? ' <span class="pill">机器人账号</span>' : (s.expectedUin ? ' <span class="mut" style="color:var(--warn)">不是机器人账号</span>' : '')) +
+    '</span><button class="btn sm" data-quick="' + esc(a.uin) + '">快速登录</button></div>').join('') :
     '<div class="mut">没有可快速登录的账号。首次请先扫码登录一次，之后就会出现在这里。</div>'
+  if (s.expectedUin && !list.some(a => a.isBotAccount)) {
+    acc.innerHTML += '<div class="mut" style="color:var(--warn);margin-top:8px">机器人账号 ' + esc(s.expectedUin) + ' 当前没有快速登录凭据（多半是睡眠/重启后失效）。用手机 QQ 登录这个号，扫上面的二维码最快。</div>'
+  }
   acc.querySelectorAll('[data-quick]').forEach(b => b.onclick = async () => {
-    try { await api('/api/action/login-quick', { uin: b.dataset.quick }); toast('已发起快速登录，稍等几秒'); setTimeout(refreshLogin, 3000) }
+    const uin = b.dataset.quick
+    if (s.expectedUin && uin !== s.expectedUin) {
+      if (!await ask('这不是机器人的账号', '要登录的是 ' + uin + '，而机器人账号是 ' + s.expectedUin + '。登错号机器人不会上线，确定继续？', '继续登录')) return
+    }
+    try { await api('/api/action/login-quick', { uin }); toast('已发起快速登录，稍等几秒'); setTimeout(refreshLogin, 3000) }
     catch (e) { toast('快速登录失败：' + e.message, true) }
   })
 }
