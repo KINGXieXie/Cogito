@@ -134,9 +134,9 @@ export function planReply({
     return { targetLen: target, lines, budget, perLineCap, lineMaxChars, analysis: true }
   }
   const lines = matchEnabled ? pickLineCount(target, { maxLines, lineMaxChars, rand }) : 1
-  // 预算：跟着对方长度走，再给几个字余量；下限 8 字（避免出现"嗯"这种没有信息的回复），
-  // 上限 = 行数 × 单行上限（多行不代表可以无限长）
-  const budget = Math.max(8, Math.min(lines * lineMaxChars, Math.round(target * 1.15) + 8))
+  // 预算：跟着对方长度走，再留一点余量让回复能带出具体细节/自己的反应（别只回一个词）。
+  // 下限 8 字；上限 = 行数 × 单行上限（多行不代表可以无限长）。
+  const budget = Math.max(8, Math.min(lines * lineMaxChars, Math.round(target * 1.15) + 12))
   const perLineCap = Math.max(8, Math.min(lineMaxChars, Math.ceil(budget / lines) + 6))
   return { targetLen: target, lines, budget, perLineCap, lineMaxChars }
 }

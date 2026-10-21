@@ -75,7 +75,7 @@ ok('超过两行容量的长度几乎必然分行', pickLineCount(100, { maxLine
 console.log('\n=== 4. planReply：预算跟着对方长度走 ===')
 const shortPlan = planReply({ incomingLen: 5, maxLines: 3, lineMaxChars: 40, rand: () => 0.99 })
 const longPlan = planReply({ incomingLen: 90, maxLines: 3, lineMaxChars: 40, rand: () => 0.99 })
-ok('短消息预算小', shortPlan.budget <= 15, `→ ${shortPlan.budget} 字`)
+ok('短消息预算小', shortPlan.budget <= 20, `→ ${shortPlan.budget} 字`)
 ok('长消息预算更大', longPlan.budget > shortPlan.budget, `→ ${longPlan.budget} vs ${shortPlan.budget}`)
 ok('预算不超过 行数×单行上限', longPlan.budget <= longPlan.lines * 40, `→ ${longPlan.budget} / ${longPlan.lines * 40}`)
 ok('关闭自适应时固定单行', planReply({ incomingLen: 90, matchEnabled: false }).lines === 1)
