@@ -191,9 +191,11 @@ const summaryVisionLLM = createGroundedVisionClient(createSummaryVisionClient({ 
 // 共享型号与设置，但不共享并发队列；记忆整理不能占住定时群总结的等待位置。
 const memoryLLM = new DeepSeekClient({
   apiKey: summaryLLM.apiKey, baseUrl: summaryLLM.baseUrl, model: summaryLLM.model,
-  temperature: summaryLLM.temperature, maxTokens: summaryLLM.maxTokens,
+  temperature: summaryLLM.temperature, maxTokens: config.longMemoryMaxTokens,
   timeoutMs: summaryLLM.timeoutMs, maxRetries: summaryLLM.maxRetries, maxConcurrency: 1,
-  enableThinking: summaryLLM.enableThinking, logger, label: '长期记忆模型', usageMeter,
+  // 记忆整理不需要"想"：v4-flash 默认会生成推理 token（一句 1+1 就有 35 个），
+  // 整理摘要时这笔钱纯属浪费。deepseek.js 会把它转成 thinking:{type:'disabled'}。
+  enableThinking: false, logger, label: '长期记忆模型', usageMeter,
 })
 const longMemory = createLongMemory({
   file: path.join(config.dataDir, 'long-memory.json'),
@@ -201,6 +203,7 @@ const longMemory = createLongMemory({
   llm: { chat: (prompt, messages) => memoryLLM.chat(prompt, messages) },
   maxChars: config.longMemoryMaxChars,
   intervalMs: config.longMemoryIntervalMs,
+  maxBatch: config.longMemoryMaxBatch,
 })
 memory.onEvict = (key, entries) => longMemory.addEvicted(key, entries)
 

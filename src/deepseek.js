@@ -185,7 +185,14 @@ export class DeepSeekClient {
 
   /** 带重试的底层请求，返回解析后的 JSON */
   async #post(body, signal) {
-    if (typeof this.enableThinking === 'boolean') body = { ...body, enable_thinking: this.enableThinking }
+    if (typeof this.enableThinking === 'boolean') {
+      // 通义千问系列认 enable_thinking；DeepSeek v4 系认 thinking:{type}。
+      // 实测（2026-10-21）：给 deepseek-v4-flash 传 enable_thinking:false 会被忽略，
+      // 模型照样生成推理 token——一句 1+1 就烧 42 个 completion token，长期记忆因此贵了好几倍。
+      body = isQwenHybridModel(this.model)
+        ? { ...body, enable_thinking: this.enableThinking }
+        : { ...body, thinking: { type: this.enableThinking ? 'enabled' : 'disabled' } }
+    }
     let lastError = null
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       signal?.throwIfAborted()

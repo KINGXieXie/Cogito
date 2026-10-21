@@ -323,6 +323,10 @@ export function loadConfig() {
     longMemoryEnabled: String(env.LONG_MEMORY_ENABLED ?? '1').toLowerCase() !== '0' && String(env.LONG_MEMORY_ENABLED ?? '1').toLowerCase() !== 'false',
     longMemoryMaxChars: Math.max(300, Math.min(6000, Math.floor(num('LONG_MEMORY_MAX_CHARS', 1500)))),
     longMemoryIntervalMs: Math.max(60000, Math.floor(num('LONG_MEMORY_INTERVAL_MS', 600000))),
+    // 攒够多少条旧消息才整理一次：调大能减少"每次重写整段摘要"的调用次数
+    longMemoryMaxBatch: Math.max(20, Math.min(500, Math.floor(num('LONG_MEMORY_MAX_BATCH', 120)))),
+    // 整理单次的输出上限：要够写完摘要（中文约 1 token/字），又不给长跑留空间
+    longMemoryMaxTokens: Math.max(400, Math.min(8000, Math.floor(num('LONG_MEMORY_MAX_TOKENS', 2600)))),
 
     temperature: Math.min(2, Math.max(0, num('TEMPERATURE', 1.2))),
     maxTokens: Math.max(1, Math.floor(num('MAX_TOKENS', 500))),

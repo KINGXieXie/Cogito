@@ -92,5 +92,17 @@ try {
     assert.equal(await c.chat('p',[]),'完整回复');assert.equal(requests,2);assert.equal(c.active,1)
     release();await rejection;assert.equal(c.active,0)
   })
+  await test('DeepSeek 用 thinking.type 关思考，千问仍用 enable_thinking', async () => {
+    const bodies=[]
+    globalThis.fetch=async (_, options)=>{bodies.push(JSON.parse(options.body));return success()}
+    await client({ model:'deepseek-v4-flash', enableThinking:false }).chat('p',[])
+    await client({ model:'deepseek-v4-flash', enableThinking:true }).chat('p',[])
+    await client({ model:'qwen3.8-flash', enableThinking:false }).chat('p',[])
+    assert.equal(bodies[0].thinking.type,'disabled')
+    assert.equal(Object.hasOwn(bodies[0],'enable_thinking'),false)
+    assert.equal(bodies[1].thinking.type,'enabled')
+    assert.equal(bodies[2].enable_thinking,false)
+    assert.equal(Object.hasOwn(bodies[2],'thinking'),false)
+  })
   console.log(`${passed} cases passed`)
 } finally {globalThis.fetch=originalFetch}
