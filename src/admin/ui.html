@@ -201,7 +201,12 @@ let pokeDiagnostics = {}
 const $ = (h) => { const d = document.createElement('div'); d.innerHTML = h.trim(); return d.firstElementChild }
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
 const api = async (path, body) => {
-  const opt = body ? { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) } : {}
+  // 控制台动作一律 POST（不带参数也要发空对象）：以前"没传 body 就走 GET"导致
+  // 新加的登录页整页 404，这种坑不该靠每个调用点记得传 {} 来避免。
+  const isAction = String(path).startsWith('/api/action/')
+  const opt = body !== undefined || isAction
+    ? { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body ?? {}) }
+    : {}
   const r = await fetch(path, opt)
   const j = await r.json().catch(() => ({}))
   if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status))
