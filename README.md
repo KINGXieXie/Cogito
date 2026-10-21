@@ -238,6 +238,8 @@ docs/                   部署文档
 
 版本变更见 [更新日志](CHANGELOG.md)。
 
+维护者与 AI 代理请先读：[架构说明](docs/ARCHITECTURE.md)、[维护手册](docs/MAINTAINER.md)、[AI 交接说明](docs/AI-HANDOFF.md)。
+
 ```powershell
 npm test
 npm run check:repo

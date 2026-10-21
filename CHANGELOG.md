@@ -1,5 +1,10 @@
 # 更新日志
 
+## 2.9.1 — 2026-10-21
+
+- 新增维护文档，便于换人/换 AI 代理接手：`docs/ARCHITECTURE.md`（运行拓扑、数据边界、消息链路、提示词装配顺序、模块地图、成本结构）、`docs/MAINTAINER.md`（发布流程、常见任务配方、已知坑与排障、交付检查清单）、`docs/AI-HANDOFF.md`（可直接粘贴给 GPT/Codex 的代理提示词与验收清单）。
+- `AGENTS.md` 与 `README.md` 增加文档入口；交接包只含仓库文件，不含 `data/`、`logs/`、`.env`。
+
 ## 2.9.0 — 2026-10-21
 
 - 长期记忆整理改为关闭思考：DeepSeek v4 系默认生成推理 token，实测同一句"1+1"completion 42 个、其中 35 个是推理；整理摘要时这笔开销纯属浪费。现在对 DeepSeek 型号发 `thinking:{type:'disabled'}`（千问仍用 `enable_thinking`，此前把 `enable_thinking` 发给 DeepSeek 会被忽略）。实测关闭后同一请求 completion 从 42 降到 6。
