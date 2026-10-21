@@ -9,7 +9,7 @@ import { activatePersona } from '../personaSwitch.js'
 import { applyConversationSettings, resetConversationMemory } from '../conversationSessions.js'
 import { writeTextAtomic } from '../stateFile.js'
 import { normalizeSpeechHabits, speechHabitsFile, SPEECH_HABITS_MAX } from '../speechHabits.js'
-import { loginSnapshot, napcatCall, findWebuiConfig, readWebuiSettings } from '../napcatLogin.js'
+import { loginSnapshot, napcatCall, findWebuiConfig, readWebuiSettings, findQrImage } from '../napcatLogin.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const UI_FILE = path.join(__dirname, 'ui.html')
@@ -819,8 +819,15 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
       if (!config.napcatDir) throw new Error('请先设置 NAPCAT_DIR（NapCat 安装目录）')
       const settings = readWebuiSettings(findWebuiConfig(config.napcatDir))
       if (!settings) throw new Error('在 NapCat 目录里找不到可用的 webui.json')
+      const fileBefore = findQrImage(config.napcatDir)
+      const mtimeBefore = fileBefore && existsSync(fileBefore) ? statSync(fileBefore).mtimeMs : 0
       await napcatCall({ port: settings.port, token: settings.token, pathname: '/api/QQLogin/RefreshQRcode' })
-      await new Promise((resolve) => setTimeout(resolve, 800))
+      // 刷新是异步的：等缓存图片真正换新再返回，避免界面拿到旧图或空图
+      for (let i = 0; i < 15; i++) {
+        const file = findQrImage(config.napcatDir)
+        if (file && existsSync(file) && statSync(file).mtimeMs > mtimeBefore) break
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
       return { ok: true, ...(await loginSnapshot({ napcatDir: config.napcatDir })) }
     },
     async 'login-quick'(payload) {
