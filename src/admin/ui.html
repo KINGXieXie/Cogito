@@ -827,7 +827,7 @@ async function bind(){
   if (page === 'login') {
     await refreshLogin()
     document.getElementById('qrRefresh').onclick = async () => {
-      try { paintLogin(await api('/api/action/login-qr-refresh')); toast('二维码已刷新') }
+      try { paintLogin(await api('/api/action/login-refresh-qr')); toast('二维码已刷新') }
       catch (e) { toast('刷新失败：' + e.message, true) }
     }
     document.getElementById('loginRestartNapcat').onclick = async () => {
