@@ -8,6 +8,7 @@ import { keyToGroupId, keyToUserId } from '../chatSettings.js'
 import { activatePersona } from '../personaSwitch.js'
 import { applyConversationSettings, resetConversationMemory } from '../conversationSessions.js'
 import { writeTextAtomic } from '../stateFile.js'
+import { normalizeSpeechHabits, speechHabitsFile, SPEECH_HABITS_MAX } from '../speechHabits.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const UI_FILE = path.join(__dirname, 'ui.html')
@@ -774,6 +775,19 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
       const result = resetConversationMemory({ config, memory, longMemory, targetWatch, key: all ? null : key, reason: '控制台清除记忆' })
       logger?.info?.(`[控制台] 已重置${all ? '全部' : key}会话记忆并备份`)
       return { ok: true, key, all, ...result }
+    },
+    // 语言习惯：只影响"怎么说"，追加在人设之后；保存即生效，不需要重启
+    async 'get-speech-habits'() {
+      return { ok: true, text: normalizeSpeechHabits(config.speechHabits), max: SPEECH_HABITS_MAX }
+    },
+    async 'save-speech-habits'(payload) {
+      const text = normalizeSpeechHabits(payload?.text)
+      writeTextAtomic(speechHabitsFile(config.dataDir), text)
+      config.speechHabits = text
+      // 让正在生成、尚未发出的旧回复作废，避免旧习惯的回复迟到
+      config.personaRevision = (config.personaRevision || 0) + 1
+      logger?.info?.(`[控制台] 已保存语言习惯：${text.length} 字，即时生效`)
+      return { ok: true, chars: text.length, needRestart: false }
     },
     async 'watch-target'(payload) {
       // 设置/取消盯人目标：改配置 → 立即重启盯人定时器 → 写回 .env，下次启动仍然生效

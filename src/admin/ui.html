@@ -170,6 +170,7 @@ const PAGES = [
   ['chats','◎  会话管理'],
   ['commands','⌘  指令中心'],
   ['persona','✧  人格编辑'],
+  ['style','✎  语言习惯'],
   ['humanize','◉  回复行为'],
   ['api','⌘  模型与接口'],
   ['report','▤  群聊报告'],
@@ -521,6 +522,37 @@ function pagePersona(){
   <div class="card"><div class="mono" style="max-height:260px;overflow:auto">${esc(appendixText)}</div></div>`
 }
 
+// ── 页面：语言习惯 ──────────────────────────────────────
+const HABIT_PRESETS = {
+  口癖: '口癖：\n- 常用"诶""唔""那个..."开头\n- 说到一半忘了就直说"欸...我刚要说啥来着"\n- 句子里偶尔用"..."表示停顿，不每句都用\n',
+  称呼: '称呼：\n- 群里那位昵称叫"叫我蟹蟹就好"的，平时喊"老登"\n- 对不熟的人用"你"，不用"您"\n- 不随便给别人起外号\n',
+  语气: '语气：\n- 轻轻的、慢慢的，不切换成讲课腔\n- 不用客服腔（"当然可以""很高兴为您服务"）\n- 不用 Markdown、标题、列表、序号\n',
+  表情: '表情：\n- 偶尔用 awa / QAQ / XD，不堆砌\n- 想发 QQ 表情时写 [表情:名字]，如 [表情:害羞]；没把握的名字不写\n',
+  长度: '长度：\n- 日常一两句说完，不写成长段落\n- 对方问需要判断的问题时，先给依据、再给结论\n',
+}
+function pageStyle(){
+  return `<h1>语言习惯</h1><div class="sub">这里改她"怎么说话"：口癖、称呼、语气、表情、句子长度。保存后立即生效，不用重启。</div>
+  <div class="card">
+    <h3>自定义语言习惯（追加在人设之后）</h3>
+    <div class="note">只影响表达方式，不改变身份、事实和关系；和人格正文冲突时以这里为准。留空表示不追加任何内容。上限 4000 字。</div>
+    <textarea id="habitText" style="min-height:300px;font-size:13.5px" placeholder="例如：
+- 常用"诶""唔"开头，句尾偶尔带 awa
+- 称呼群里那位为"老登"
+- 一次最多两句，不用分点，不用 Markdown"></textarea>
+    <div class="flexbar">
+      <button class="btn primary" id="saveHabit">保存并立即生效</button>
+      <button class="btn" id="clearHabit">清空</button>
+      <span class="mut" id="habitCount">0 / 4000 字</span>
+    </div>
+    <div class="flexbar" id="habitPresets">
+      <span class="mut">插入范例：</span>
+      ${Object.keys(HABIT_PRESETS).map(k => `<button class="btn sm" type="button" data-habit-preset="${k}">${k}</button>`).join('')}
+    </div>
+    <div class="mut" style="font-size:12px">范例只是起点，可以随意改成你自己的写法；改完点保存就会用在下一句回复里。</div>
+  </div>
+  <div class="note">这一页只存表达偏好，适合反复微调；身份、世界观和关系设定建议写在「人格编辑」里。</div>`
+}
+
 // ── 页面：配置表单（拟人化 / 接口 / 报告）─────────────────
 function groupName(id){
   return chats.find(c => c.type === 'group' && Number(c.id) === Number(id))?.name || joinedGroups.find(g => Number(g.id) === Number(id))?.name || ('群 ' + id)
@@ -669,6 +701,7 @@ function render(){
   else if (page === 'chats') html = pageChats()
   else if (page === 'commands') html = pageCommands()
   else if (page === 'persona') html = pagePersona()
+  else if (page === 'style') html = pageStyle()
   else if (page === 'humanize') html = pageHumanize()
   else if (page === 'api') html = pageApi()
   else if (page === 'report') html = pageReport()
@@ -696,6 +729,47 @@ async function bind(){
     catch(e){ toast('失败：' + e.message, true) }
     b.disabled = false
   })
+
+  // 语言习惯：加载 → 编辑 → 保存（保存即生效）
+  if (page === 'style') {
+    const box = document.getElementById('habitText')
+    const count = document.getElementById('habitCount')
+    const sync = () => {
+      const n = box.value.trim().length
+      count.textContent = n + ' / 4000 字'
+      count.style.color = n > 4000 ? 'var(--warn)' : ''
+    }
+    try {
+      const r = await api('/api/action/get-speech-habits')
+      box.value = r.text || ''
+    } catch (e) { toast('读取语言习惯失败：' + e.message, true) }
+    sync()
+    box.oninput = sync
+    document.getElementById('saveHabit').onclick = async () => {
+      try {
+        const r = await api('/api/action/save-speech-habits', { text: box.value })
+        box.value = r.text ?? box.value
+        sync()
+        toast('已保存并生效（' + r.chars + ' 字），下一句回复就用新习惯')
+      } catch (e) { toast('保存失败：' + e.message, true) }
+    }
+    document.getElementById('clearHabit').onclick = async () => {
+      if (!await ask('清空语言习惯？', '清空后不再追加任何自定义表达规则，人设本身不受影响。', '清空')) return
+      try {
+        await api('/api/action/save-speech-habits', { text: '' })
+        box.value = ''
+        sync()
+        toast('已清空')
+      } catch (e) { toast('清空失败：' + e.message, true) }
+    }
+    document.querySelectorAll('[data-habit-preset]').forEach(b => b.onclick = () => {
+      const preset = HABIT_PRESETS[b.dataset.habitPreset] || ''
+      if (!preset) return
+      box.value = (box.value.trim() ? box.value.replace(/\s+$/, '') + '\n\n' : '') + preset
+      sync()
+      box.focus()
+    })
+  }
 
   // 折叠
   document.querySelectorAll('.chat .head').forEach(h => h.onclick = (ev) => {

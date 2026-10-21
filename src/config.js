@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readLocalProfile } from './localProfile.js'
+import { readSpeechHabits } from './speechHabits.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export const ROOT_DIR = path.resolve(__dirname, '..')
@@ -203,6 +204,8 @@ export function loadConfig() {
     botName: String(env.BOT_NAME ?? 'Koukou').trim() || 'Koukou',
     persona: readPersona(),
     personaDir: PERSONA_DIR,
+    // 控制台「语言习惯」页写入实例数据目录，追加在人设之后；空串表示不追加
+    speechHabits: readSpeechHabits(DATA_DIR),
     localProfile,
     pokeRepliesFile: env.POKE_REPLIES_FILE ? path.resolve(path.dirname(envFile), env.POKE_REPLIES_FILE) : path.join(DATA_DIR, 'poke-replies.txt'),
     activePersona: String(env.ACTIVE_PERSONA ?? '').trim(),
