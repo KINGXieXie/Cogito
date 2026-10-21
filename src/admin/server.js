@@ -9,6 +9,7 @@ import { activatePersona } from '../personaSwitch.js'
 import { applyConversationSettings, resetConversationMemory } from '../conversationSessions.js'
 import { writeTextAtomic } from '../stateFile.js'
 import { normalizeSpeechHabits, speechHabitsFile, SPEECH_HABITS_MAX } from '../speechHabits.js'
+import { loginSnapshot, napcatCall, findWebuiConfig, readWebuiSettings } from '../napcatLogin.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const UI_FILE = path.join(__dirname, 'ui.html')
@@ -809,6 +810,32 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
       logger?.info?.('[控制台] 收到重启机器人指令')
       setTimeout(() => restartBot?.(), 300)
       return { ok: true }
+    },
+    // QQ 登录：让部署者自己在控制台看状态、取二维码、发起快速登录，不必找别人代劳
+    async 'login-status'() {
+      return { ok: true, ...(await loginSnapshot({ napcatDir: config.napcatDir })) }
+    },
+    async 'login-refresh-qr'() {
+      if (!config.napcatDir) throw new Error('请先设置 NAPCAT_DIR（NapCat 安装目录）')
+      const settings = readWebuiSettings(findWebuiConfig(config.napcatDir))
+      if (!settings) throw new Error('在 NapCat 目录里找不到可用的 webui.json')
+      await napcatCall({ port: settings.port, token: settings.token, pathname: '/api/QQLogin/RefreshQRcode' })
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      return { ok: true, ...(await loginSnapshot({ napcatDir: config.napcatDir })) }
+    },
+    async 'login-quick'(payload) {
+      const uin = String(payload?.uin ?? '').trim()
+      if (!/^\d{5,12}$/.test(uin)) throw new Error('QQ 号格式不对')
+      if (!config.napcatDir) throw new Error('请先设置 NAPCAT_DIR（NapCat 安装目录）')
+      const settings = readWebuiSettings(findWebuiConfig(config.napcatDir))
+      if (!settings) throw new Error('在 NapCat 目录里找不到可用的 webui.json')
+      try {
+        await napcatCall({ port: settings.port, token: settings.token, pathname: '/api/QQLogin/SetQuickLogin', payload: { uin } })
+      } catch (err) {
+        throw new Error(`快速登录失败：${err.message}`)
+      }
+      logger?.info?.(`[控制台] 已发起快速登录（${uin}）`)
+      return { ok: true, uin }
     },
     async 'restart-napcat'() {
       // 必须**先杀掉正在跑的实例再启动**：只 start 不 kill 会同时跑起两个 NapCat，

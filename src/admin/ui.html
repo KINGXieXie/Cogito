@@ -171,6 +171,7 @@ const PAGES = [
   ['commands','⌘  指令中心'],
   ['persona','✧  人格编辑'],
   ['style','✎  语言习惯'],
+  ['login','⇲  QQ 登录'],
   ['humanize','◉  回复行为'],
   ['api','⌘  模型与接口'],
   ['report','▤  群聊报告'],
@@ -553,6 +554,55 @@ function pageStyle(){
   <div class="note">这一页只存表达偏好，适合反复微调；身份、世界观和关系设定建议写在「人格编辑」里。</div>`
 }
 
+// ── 页面：QQ 登录 ──────────────────────────────────────
+let loginTimer = null
+function pageLogin(){
+  return `<h1>QQ 登录</h1><div class="sub">机器人掉登录时，在这里直接看二维码登录，不用另外开窗口或找人代发；登录成功后机器人会自动重连。</div>
+  <div class="card">
+    <div class="row" id="loginStatus"><span class="mut">正在读取 NapCat 状态…</span></div>
+    <div id="loginQrBox" style="margin-top:12px"></div>
+    <div class="flexbar" style="margin-top:12px">
+      <button class="btn primary" id="qrRefresh">刷新二维码</button>
+      <button class="btn" id="loginRestartNapcat">重启 NapCat</button>
+      <span class="mut" id="qrHint"></span>
+    </div>
+  </div>
+  <h2>可快速登录的账号</h2>
+  <div class="card" id="loginAccounts"><div class="mut">读取中…</div></div>
+  <div class="note">用手机 QQ 登录<b>机器人账号</b>（不是你的主号）后扫码；二维码约 2 分钟过期，过期点「刷新二维码」。登录后机器人几秒内自动连上，不用重启机器人。</div>`
+}
+function paintLogin(s){
+  const st = document.getElementById('loginStatus')
+  if (!st) return
+  if (!s || !s.reachable) {
+    st.innerHTML = '<span class="pill">NapCat 未就绪</span><span class="mut" style="margin-left:8px">' + esc((s && s.error) || '无法连接 NapCat WebUI') + '</span>'
+    document.getElementById('loginQrBox').innerHTML = ''
+    document.getElementById('loginAccounts').innerHTML = '<div class="mut">需要 NapCat 在线才能读取账号列表。</div>'
+    document.getElementById('qrHint').textContent = ''
+    return
+  }
+  st.innerHTML = (s.isLogin ? '<span class="pill">已登录</span>' : '<span class="pill">等待扫码</span>') +
+    '<span class="mut" style="margin-left:8px">账号 ' + esc(s.uin || '—') + (s.phase ? ' · ' + esc(s.phase) : '') + '</span>'
+  const qrBox = document.getElementById('loginQrBox')
+  if (s.isLogin) qrBox.innerHTML = '<div class="note">机器人已登录，不需要扫码。想换号或强制重新登录，点「重启 NapCat」，重启后二维码会出现在这里。</div>'
+  else if (s.qr && s.qr.dataUrl) qrBox.innerHTML = '<img alt="QQ 登录二维码" src="' + s.qr.dataUrl + '" style="width:220px;height:220px;display:block;background:#fff;border-radius:12px;padding:8px">'
+  else qrBox.innerHTML = '<div class="mut">暂时没有二维码缓存，点「刷新二维码」生成。</div>'
+  document.getElementById('qrHint').textContent = s.qr && s.qr.updatedAt ? '二维码更新于 ' + new Date(s.qr.updatedAt).toLocaleTimeString('zh-CN',{hour12:false}) : ''
+  const acc = document.getElementById('loginAccounts')
+  const list = Array.isArray(s.accounts) ? s.accounts : []
+  acc.innerHTML = list.length ? list.map(a =>
+    '<div class="row"><span>' + esc(a.nickName || a.uin) + ' <span class="mut">' + esc(a.uin) + (a.isAutoLogin ? ' · 自动登录' : '') + '</span></span>' +
+    '<button class="btn sm" data-quick="' + esc(a.uin) + '">快速登录</button></div>').join('') :
+    '<div class="mut">没有可快速登录的账号。首次请先扫码登录一次，之后就会出现在这里。</div>'
+  acc.querySelectorAll('[data-quick]').forEach(b => b.onclick = async () => {
+    try { await api('/api/action/login-quick', { uin: b.dataset.quick }); toast('已发起快速登录，稍等几秒'); setTimeout(refreshLogin, 3000) }
+    catch (e) { toast('快速登录失败：' + e.message, true) }
+  })
+}
+async function refreshLogin(){
+  try { paintLogin(await api('/api/action/login-status')) } catch (e) { paintLogin({ reachable: false, error: e.message }) }
+}
+
 // ── 页面：配置表单（拟人化 / 接口 / 报告）─────────────────
 function groupName(id){
   return chats.find(c => c.type === 'group' && Number(c.id) === Number(id))?.name || joinedGroups.find(g => Number(g.id) === Number(id))?.name || ('群 ' + id)
@@ -702,6 +752,7 @@ function render(){
   else if (page === 'commands') html = pageCommands()
   else if (page === 'persona') html = pagePersona()
   else if (page === 'style') html = pageStyle()
+  else if (page === 'login') html = pageLogin()
   else if (page === 'humanize') html = pageHumanize()
   else if (page === 'api') html = pageApi()
   else if (page === 'report') html = pageReport()
@@ -769,6 +820,22 @@ async function bind(){
       sync()
       box.focus()
     })
+  }
+
+  // QQ 登录页：状态 + 二维码 + 快速登录 + 重启 NapCat（离开页面时停掉轮询）
+  if (loginTimer) { clearInterval(loginTimer); loginTimer = null }
+  if (page === 'login') {
+    await refreshLogin()
+    document.getElementById('qrRefresh').onclick = async () => {
+      try { paintLogin(await api('/api/action/login-qr-refresh')); toast('二维码已刷新') }
+      catch (e) { toast('刷新失败：' + e.message, true) }
+    }
+    document.getElementById('loginRestartNapcat').onclick = async () => {
+      if (!await ask('重启 NapCat？', 'QQ 会断开一会儿，机器人随后自动重连；如果掉登录，刷新后扫码即可。', '重启')) return
+      try { await api('/api/action/restart-napcat'); toast('NapCat 重启中，10 秒后自动刷新'); setTimeout(refreshLogin, 10000) }
+      catch (e) { toast('重启失败：' + e.message, true) }
+    }
+    loginTimer = setInterval(refreshLogin, 5000)
   }
 
   // 折叠
