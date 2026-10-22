@@ -16,7 +16,7 @@ import { expandForwardRecords } from './forwardRecords.js'
 import { createQuotedMessageResolver } from './quotedMessage.js'
 import { renderFacesToCq } from './qqFace.js'
 import { limitDecorationLines, hasDecoration, typingDelay, isQuietHour } from './humanize.js'
-import { measureText, backlogLength, planReply, shapeReply, shapeHint, decorationHint, ensureDecoration, pickDecorationKind, asksForAnalysis } from './replyShape.js'
+import { measureText, backlogLength, planReply, shapeReply, shapeHint, decorationHint, ensureDecoration, pickDecorationKind, asksForAnalysis, asksForQuestion } from './replyShape.js'
 import {
   checkMembers,
   buildReminderMessages,
@@ -1018,6 +1018,8 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         longForm: LONG_FORM_RE.test(parsed.text),
         // 判断/分析型提问（我的 MBTI 是什么、你觉得我性格怎么样）：允许"先依据后结论"的两三行
         analysis: asksForAnalysis(parsed.text),
+        // 普通问句（今天有什么新闻、哪家店好吃）：答案要一两句，别按字数腰斩
+        question: asksForQuestion(parsed.text),
         rand, // 可注入的随机源（生产为 Math.random，测试可固定以保证确定性）
       })
       logger.debug(`[形态] 对方 ${incomingLen} 字 → 目标 ${plan.targetLen} 字｜${plan.lines} 行｜预算 ${plan.budget} 字`)

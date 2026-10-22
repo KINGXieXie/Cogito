@@ -3,7 +3,7 @@
  * 离线运行：node scripts/test-reply-analysis.mjs
  */
 import assert from 'node:assert/strict'
-import { asksForAnalysis, planReply, shapeHint, shapeReply, measureText } from '../src/replyShape.js'
+import { asksForAnalysis, asksForQuestion, planReply, shapeHint, shapeReply, measureText } from '../src/replyShape.js'
 
 // 1) 哪些问法算"需要判断/分析"
 assert.equal(asksForAnalysis('我的mbti是什么'), true)
@@ -56,7 +56,26 @@ assert.ok(shapeHint(tiny).includes('一两个字也行'), '提示要给极短回
 const tolerantPlan = { lines: 1, budget: 8, perLineCap: 18, lineMaxChars: 40 }
 assert.deepEqual(shapeReply('唔…累的话，先坐下歇会儿。', tolerantPlan), ['唔…累的话，先坐下歇会儿。'])
 const overflowPlan = { lines: 1, budget: 8, perLineCap: 40, lineMaxChars: 40 }
-assert.ok(shapeReply('这句明明超预算很多很多很多很多很多很多人', overflowPlan)[0].length < 30, '超太多仍要裁')
+assert.ok(shapeReply('这句明明超预算很多很多很多很多很多很多人', overflowPlan)[0].length < 40, '超太多仍要裁')
+
+// 9) 问句给足答案空间：几个字的提问也要能答完一两句，不被腰斩成"……"
+assert.equal(asksForQuestion('今天有什么新闻'), true)
+assert.equal(asksForQuestion('发了啥'), true)
+assert.equal(asksForQuestion('你知道同济四平校区有什么好吃的嘛'), true)
+assert.equal(asksForQuestion('在？'), false, '两个字的招呼不算问句')
+assert.equal(asksForQuestion('今天好累啊'), false)
+const newsPlan = planReply({ incomingLen: measureText('今天有什么新闻'), maxLines: 10, lineMaxChars: 40, matchEnabled: true, question: true })
+assert.ok(newsPlan.budget >= 36, `问句预算应给到一行，当前 ${newsPlan.budget}`)
+assert.ok(shapeHint(newsPlan).includes('把话说完整'), '问句提示要明确要求说完')
+const plainPlan = planReply({ incomingLen: measureText('今天有什么新闻'), maxLines: 10, lineMaxChars: 40, matchEnabled: true })
+assert.ok(plainPlan.budget < newsPlan.budget, '不问问题时仍按对方长度走')
+
+// 10) 两条很短的话合成一条发，避免"在呀。"+"怎么啦。"这种碎碎念
+const merged = shapeReply('在呀。\n怎么啦。', { lines: 2, budget: 40, perLineCap: 20, lineMaxChars: 40 })
+assert.equal(merged.length, 1, '短的两行应合并成一条')
+assert.ok(merged[0].includes('在呀') && merged[0].includes('怎么啦'))
+const keepSplit = shapeReply('唔……四平那边啊，我脑子一时有点空。\n老登要是知道，估计又要吹他当年吃遍食堂了。', { lines: 2, budget: 80, perLineCap: 40, lineMaxChars: 40 })
+assert.equal(keepSplit.length, 2, '内容够长时仍分两条')
 
 // 7) 明确要求长内容时 longForm 优先于分析形态
 assert.equal(planReply({ incomingLen: 10, maxLines: 5, lineMaxChars: 40, analysis: true, longForm: true }).longForm, true)

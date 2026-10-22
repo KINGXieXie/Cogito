@@ -87,6 +87,20 @@ export function pickLineCount(targetLen, { maxLines = 3, lineMaxChars = 40, rand
 }
 
 /**
+ * 普通问句：含疑问词或"？"，或够长的疑问句式。
+ * 这类话对方虽然只打了几个字，但答案是"一两句才说得完"的（今天有什么新闻、哪家店好吃），
+ * 只按字数给预算会把答案腰斩成"……"，看起来就断断续续。
+ */
+export function asksForQuestion(text) {
+  const s = String(text ?? '').trim()
+  if (!s) return false
+  const len = s.replace(/\s+/g, '').length
+  const info = /什么|啥|怎么|哪|多少|谁|为什么|为啥|如何|几点|几号|新闻|天气|价格|最近|现在|有没有|能不能|会不会|是不是|知道/.test(s)
+  const mark = /[?？]/.test(s) && len >= 4
+  return info || mark
+}
+
+/**
  * 判断型 / 分析型提问：问 MBTI、性格、星座、评价、建议、原因这类"要你先给依据、
  * 再下结论"的问题。这类问题允许比"跟着对方长度走"多出一两行，但仍然不是长段落。
  * 只做粗筛：命中了只是把形态放宽，语气和人设完全不受影响。
@@ -115,6 +129,7 @@ export function planReply({
   matchEnabled = true,
   longForm = false,
   analysis = false,
+  question = false,
   backlogWeight = 0.35,
   rand = Math.random,
 } = {}) {
@@ -137,9 +152,12 @@ export function planReply({
   // 预算：跟着对方长度走，再留一点余量让回复能带出具体细节/自己的反应。
   // 极短输入（"在吗""嗯"）少给余量——真人这时候往往只回一两个字，不该永远比对方说得多。
   const surplus = target <= 8 ? 6 : 12
-  const budget = Math.max(4, Math.min(lines * lineMaxChars, Math.round(target * 1.15) + surplus))
+  let budget = Math.max(4, Math.min(lines * lineMaxChars, Math.round(target * 1.15) + surplus))
+  // 问句是例外：对方只打了几个字，但答案往往要一两句（"今天有什么新闻""哪家店好吃"）。
+  // 按字数硬卡会把答案腰斩成"……"，看起来断断续续；这里把问句的地板抬到一行能写完。
+  if (question) budget = Math.max(budget, Math.min(lines * lineMaxChars, Math.min(lineMaxChars, 40)))
   const perLineCap = Math.max(4, Math.min(lineMaxChars, Math.ceil(budget / lines) + 6))
-  return { targetLen: target, lines, budget, perLineCap, lineMaxChars }
+  return { targetLen: target, lines, budget, perLineCap, lineMaxChars, ...(question ? { question: true } : {}) }
 }
 
 /**
@@ -277,11 +295,17 @@ export function shapeReply(raw, plan) {
   lines = lines.map((s) => trimTo(s, lineCap + decorationChars(s))).filter((s) => s.length > 0)
   if (lines.length === 0) return fallback()
 
+  // 两三条很短的话不必拆开发：一条"在呀，怎么啦"比"在呀。"+"怎么啦。"更像人打字。
+  // 判断型提问例外——它要的就是"依据一条、结论一条"。
+  if (!plan?.analysis && lines.length > 1 && contentLength(lines.join('')) <= 30) {
+    lines = [lines.join(' ')]
+  }
+
   // 总预算同样只算正文，装饰符号白送（否则短回复里 🍥/颜文字永远第一个被丢掉）
   let total = contentLength(lines.join(''))
-  // 只超一点点（≤6 字）就不动刀：把"唔…累的话，先坐下歇会儿"裁成"唔…累的话"反而更像机器人。
+  // 只超一点点（≤12 字）就不动刀：把"唔…累的话，先坐下歇会儿"裁成"唔…累的话"反而更像机器人。
   // 真人宁可多说几个字，也不会为了对齐预算把一句话砍断。
-  if (total - budget > 6) {
+  if (total - budget > 12) {
     for (let i = lines.length - 1; i >= 0 && total > budget; i--) {
       const allow = Math.max(4, budget - (total - contentLength(lines[i])))
       lines[i] = trimTo(lines[i], allow + decorationChars(lines[i]))
@@ -337,8 +361,10 @@ export function shapeHint(plan) {
     return `\n\n【本次回复的形态要求（系统自动生成，绝不要提及它）】对方在问你一件需要你判断/分析的事（比如他的 MBTI、性格、看法、建议）。请分成 ${lines} 行写（用换行分隔）：前面的行先给一句依据或分析，最后一行再单独给结论（例如"所以我猜你是 XX"）；每行 ${lo}~${perLine} 字、整体 ${totalLo}~${budget} 字。用你平时说话的语气，不要编号、不要列表、不要复述题目，也不要写成长段落、小作文或分点讲解——每一行都要能单独作为一条消息发出去，最后一行的结论必须明确。`
   }
   if (lines <= 1) {
-    // 短消息不写成"凑字数"：先接话，再给一个具体的点；没什么可说时一两个字也行
-    return `\n\n【本次回复的形态要求（系统自动生成，绝不要提及它）】对方这条消息大约 ${targetLen} 字。一行写完就够了（${budget} 字以内）：先接住他的话，再给一个具体的点——一个细节、一点自己的判断或情绪；没什么可说的时候，一两个字也行（"在""嗯？"），别为了凑长度加空话。`
+    // 短消息不写成"凑字数"：先接话，再给一个具体的点；没什么可说时一两个字也行。
+    // 问句要特别强调"把话说完"：模型看到字数上限会自己写个"……"把句子吊住，读起来断断续续。
+    const ask = plan.question ? '这是在问你问题：把话说完整、给出答案，不要用「……」故意吊着或半句就停。' : ''
+    return `\n\n【本次回复的形态要求（系统自动生成，绝不要提及它）】对方这条消息大约 ${targetLen} 字。一行写完就够了（${budget} 字以内）：先接住他的话，再给一个具体的点——一个细节、一点自己的判断或情绪；没什么可说的时候，一两个字也行（"在""嗯？"），别为了凑长度加空话。${ask}`
   }
   // 关键是给出"目标区间"而不是"上限"：只说上限，模型会理解成"尽量短"，长度就跟不上对方
   const lo = Math.max(4, Math.round((budget / lines) * 0.7))
