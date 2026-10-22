@@ -15,6 +15,7 @@ const scripts = [
   'test-vision-knowledge.mjs',
   'test-reply-metadata.mjs',
   'test-reply-analysis.mjs',
+  'test-reply-direct.mjs',
   'test-chat-appendix.mjs',
   'test-speech-habits.mjs',
   'test-napcat-login.mjs',

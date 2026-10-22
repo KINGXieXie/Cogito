@@ -111,6 +111,23 @@ export function typingDelay({ min = 600, max = 2500 } = {}) {
   return sleep(ms)
 }
 
+/**
+ * 被@/私聊时的"先想一想"停顿：对方问得越长，停顿越像在想。
+ * 只用于直接对话；群里自己水两句不加这段，否则像在装深沉。
+ */
+export function thinkDelayMs({ min = 800, max = 2200, length = 0 } = {}, rand = Math.random) {
+  const lo = Math.max(0, min)
+  const hi = Math.max(lo, max)
+  const span = hi - lo
+  const weight = Math.min(1, Math.max(0, Number(length) || 0) / 40)
+  const base = lo + span * (0.35 + 0.45 * weight)
+  return Math.round(Math.min(hi, base + rand() * span * 0.2))
+}
+
+export function thinkDelay(options = {}) {
+  return sleep(thinkDelayMs(options))
+}
+
 /** 滑动窗口限流：每个会话每小时最多 N 条、两条之间最小间隔 */
 export function createRateLimiter({ perHour = 25, minGapMs = 4000 } = {}) {
   const lastSent = new Map() // key -> 上次发送时间戳

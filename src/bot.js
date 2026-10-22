@@ -15,7 +15,7 @@ import { resetConversationMemory, prepareSessionPersona, sessionPersona, sameSes
 import { expandForwardRecords } from './forwardRecords.js'
 import { createQuotedMessageResolver } from './quotedMessage.js'
 import { renderFacesToCq } from './qqFace.js'
-import { limitDecorationLines, hasDecoration, typingDelay, isQuietHour } from './humanize.js'
+import { limitDecorationLines, hasDecoration, typingDelay, thinkDelayMs, isQuietHour } from './humanize.js'
 import { measureText, backlogLength, planReply, shapeReply, shapeHint, decorationHint, ensureDecoration, pickDecorationKind, asksForAnalysis, asksForQuestion } from './replyShape.js'
 import {
   checkMembers,
@@ -1020,6 +1020,8 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         analysis: asksForAnalysis(parsed.text),
         // 普通问句（今天有什么新闻、哪家店好吃）：答案要一两句，别按字数腰斩
         question: asksForQuestion(parsed.text),
+        // 被@/引用/私聊：给"想了一下、答完整"的多句回复
+        direct: directReply,
         rand, // 可注入的随机源（生产为 Math.random，测试可固定以保证确定性）
       })
       logger.debug(`[形态] 对方 ${incomingLen} 字 → 目标 ${plan.targetLen} 字｜${plan.lines} 行｜预算 ${plan.budget} 字`)
@@ -1029,7 +1031,7 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
       const decoKind = allowDecoration ? pickDecorationKind(rand, decorationPreset) : ''
       // 会话专属要求（控制台里设的），跟在人设后面、机械规则前面
       const customPart = eff?.customPrompt ? `\n\n【本会话的特别要求（管理员设置，优先遵守）】${eff.customPrompt}` : ''
-      const systemPrompt =
+      let systemPrompt =
         buildSystemPrompt({ botName: config.botName, now: new Date(), chatKey: key, query: parsed.text, personaText: sessionPersonaText }) +
         customPart +
         currentMessageHint(evt) +
@@ -1041,6 +1043,23 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
       const canContinue = () => samePersona() && sameSessionPersona(config, chatSettings, key, sessionPersonaText) &&
         replyStillCurrent(onebot, evt, { latestOnly: !directReply }) && !autoPlusOne.wasTriggered(repetition)
       if (!canContinue()) return
+      // 直接对话先"想清楚对方在问什么"：一句小调用换来不答偏，长消息/带引用时才做。
+      if (directReply && config.understandEnabled &&
+        (measureText(parsed.text) >= config.understandMinChars || quoted || forwarded?.found || quotedForward?.found)) {
+        try {
+          const understanding = String(await llm.chat(
+            '你是对话理解助手。只输出三行：\n1) 对方真正的问题或请求（一句话）；\n2) 隐含需求或情绪（一句，没有就写"无"）；\n3) 回答必须覆盖的要点（最多三条，短句）。\n不要寒暄，不要复述原文，不要给答案。',
+            [...baseHistory.slice(-6), { role: 'user', content: `【要回答的这条消息】${content}` }],
+            { maxTokens: 240 },
+          ) ?? '').trim()
+          if (understanding) {
+            systemPrompt += `\n\n【先想清楚（内部笔记，绝不要输出、也不要复述）：对方的问题、隐含需求、必须覆盖的要点】\n${understanding.slice(0, 900)}`
+            logger.info(`[理解] ${understanding.replace(/\n+/g, ' / ').slice(0, 140)}`)
+          }
+        } catch (err) {
+          logger.warn(`理解步骤失败，直接回答：${err.message}`)
+        }
+      }
       try {
         let reply
         let imageDescription = ''
@@ -1128,6 +1147,15 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         // 保证"记忆里的话 = 真的发出去过的话"
         if (!(await waitForHumanGap(key, hourCap))) return
         if (!canContinue()) return
+        // 被@/私聊时先"想一想"再打字：对方问得越长，停顿越久（群里自己水两句不加）
+        if (directReply) {
+          const thinkMs = thinkDelayMs({ min: config.thinkDelayMinMs, max: config.thinkDelayMaxMs, length: measureText(parsed.text) }, rand)
+          if (thinkMs > 0) {
+            logger.info(`[思考] ${thinkMs}ms（直接对话）`)
+            await new Promise((resolve) => setTimeout(resolve, thinkMs))
+            if (!canContinue()) return
+          }
+        }
         // 拟人延迟后再检查一次，避免第一条的慢回复打断刚触发的 +1。
         await typingDelay({ min: config.humanDelayMinMs, max: config.humanDelayMaxMs })
         if (!canContinue()) return

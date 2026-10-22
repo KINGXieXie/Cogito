@@ -130,6 +130,7 @@ export function planReply({
   longForm = false,
   analysis = false,
   question = false,
+  direct = false,
   backlogWeight = 0.35,
   rand = Math.random,
 } = {}) {
@@ -147,6 +148,14 @@ export function planReply({
     const budget = Math.max(36, Math.min(lines * lineMaxChars, Math.round(target * 0.7) + 42))
     const perLineCap = Math.max(10, Math.min(lineMaxChars, Math.round(budget / lines) + 8))
     return { targetLen: target, lines, budget, perLineCap, lineMaxChars, analysis: true }
+  }
+  // 被 @ / 引用 / 私聊的直接对话：给对方"想了一下、答完整"的回复——2~3 句而不是一句打发。
+  // 两个字以内的招呼（"在？"）不硬凑，仍按普通短回复走。
+  if (direct && maxLines > 1 && (question || target >= 6)) {
+    const lines = Math.min(maxLines, Math.max(2, Math.min(3, Math.ceil((target + 30) / 35))))
+    const budget = Math.max(70, Math.min(lines * lineMaxChars, Math.round(target * 1.3) + 70))
+    const perLineCap = Math.max(12, Math.min(lineMaxChars, Math.round(budget / lines) + 10))
+    return { targetLen: target, lines, budget, perLineCap, lineMaxChars, direct: true, ...(question ? { question: true } : {}) }
   }
   const lines = matchEnabled ? pickLineCount(target, { maxLines, lineMaxChars, rand }) : 1
   // 预算：跟着对方长度走，再留一点余量让回复能带出具体细节/自己的反应。
@@ -359,6 +368,12 @@ export function shapeHint(plan) {
     const lo = Math.max(6, Math.round((budget / lines) * 0.6))
     const totalLo = lo * lines
     return `\n\n【本次回复的形态要求（系统自动生成，绝不要提及它）】对方在问你一件需要你判断/分析的事（比如他的 MBTI、性格、看法、建议）。请分成 ${lines} 行写（用换行分隔）：前面的行先给一句依据或分析，最后一行再单独给结论（例如"所以我猜你是 XX"）；每行 ${lo}~${perLine} 字、整体 ${totalLo}~${budget} 字。用你平时说话的语气，不要编号、不要列表、不要复述题目，也不要写成长段落、小作文或分点讲解——每一行都要能单独作为一条消息发出去，最后一行的结论必须明确。`
+  }
+  if (plan.direct) {
+    // 直接对话（被@/引用/私聊）：先想清楚再答，用 2~3 句完整的话，保持人格语气
+    const lo = Math.max(8, Math.round((budget / lines) * 0.5))
+    const totalLo = lo * lines
+    return `\n\n【本次回复的形态要求（系统自动生成，绝不要提及它）】对方在 @ 你或直接跟你说话。先想一下他到底在问什么、想要什么，再用 ${lines} 句完整的话回答（用换行分隔，系统会每句单独发一条）：每句 ${lo}~${perLine} 字、整体 ${totalLo}~${budget} 字。要回答到点上，给出理由或具体细节，别只丢一句客气话；保持你平时的语气、口癖和反应，别变成答题机器人，也不要编号、列表或复述题目。`
   }
   if (lines <= 1) {
     // 短消息不写成"凑字数"：先接话，再给一个具体的点；没什么可说时一两个字也行。

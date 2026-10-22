@@ -18,9 +18,15 @@ const quote=id=>({type:'reply',data:{id:String(id)}}),forward=id=>({type:'forwar
 const node=(name, content)=>({sender:{nickname:name,user_id:200000020},time:1,message:content})
 const dir=mkdtempSync(path.join(os.tmpdir(),'koukou-context-')),stores=[]
 let files=0,ids=1000,passed=0
+// 时间必须可控：记忆按"秒"排序，若让回复用真实 Date.now() 而后面的消息用假的未来时间，
+// 同一秒内就会因为跨秒边界把 assistant 排到所有 user 后面（凌晨/秒边界跑就随机失败）。
+const realNow = Date.now.bind(Date)
+let fakeNow = realNow()
+Date.now = () => fakeNow
 async function test(name,fn){await fn();passed++;console.log(`PASS ${name}`)}
 function setup({config={},getMsg,forwards={},chat,chatSettings,rateLimiter,visionLLM,summaryGroups=[group]}={}) {
-  let time=Math.floor(Date.now()/1000)*1000
+  let time=Math.floor(realNow()/1000)*1000
+  fakeNow=time
   const timeline=new MessageTimeline({now:()=>time});timeline.begin()
   const memory=new MemoryStore({file:path.join(dir,`${++files}.json`),limit:99,logger});stores.push(memory)
   const sent=[],requests=[],lookups=[],forwardReads=[],captured=[]
@@ -39,7 +45,7 @@ function setup({config={},getMsg,forwards={},chat,chatSettings,rateLimiter,visio
   function event(message,extra={}){const evt={post_type:'message',message_type:'group',user_id:user,group_id:group,
     message_id:++ids,time:time/1000,sender:{nickname:'群友甲'},message:typeof message==='string'?[text(message)]:message,...extra}
     evt.messageContext=timeline.receive(evt);return evt}
-  return {bot,memory,cfg,timeline,onebot,sent,requests,lookups,forwardReads,captured,event,advance:ms=>{time+=ms},time:()=>time}
+  return {bot,memory,cfg,timeline,onebot,sent,requests,lookups,forwardReads,captured,event,advance:ms=>{time+=ms;fakeNow=time},time:()=>time}
 }
 const lastUser=t=>t.requests.at(-1)[1].at(-1).content
 const shape=t=>t.requests.at(-1)[0].match(/【本次回复的形态要求[^]*?(?=\n\n【|$)/)?.[0]
@@ -254,7 +260,7 @@ try {
     assert.equal(backlogLength(restored.get(`g${group}`)),2)
     assert.ok(modelHistory(restored.get(`g${group}`)).every(m=>Object.keys(m).sort().join(',')==='content,role'))
     await t.bot.handleMessage(t.event([at(),text('怎么看')]))
-    assert.equal(t.requests.length,1);assert.match(shape(t),/大约 4 字/)
+    assert.equal(t.requests.length,1);assert.match(shape(t),/先想一下|在 @ 你/)
     assert.match(t.requests[0][1][0].content,/历史资料/)
   })
   await test('读取失败明确说明资料缺失，不伪造聊天原文',async()=>{

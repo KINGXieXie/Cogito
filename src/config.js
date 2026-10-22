@@ -294,6 +294,12 @@ export function loadConfig() {
     emojiKeepRate: Math.min(1, Math.max(0, num('EMOJI_KEEP_RATE', 0.2))),
     humanDelayMinMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MIN_MS', 600))),
     humanDelayMaxMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MAX_MS', 2500))),
+    // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等
+    thinkDelayMinMs: Math.max(0, Math.floor(num('THINK_DELAY_MIN_MS', 800))),
+    thinkDelayMaxMs: Math.max(0, Math.floor(num('THINK_DELAY_MAX_MS', 2200))),
+    // 直接对话前先做一次"理解对方在问什么"的小调用（长消息或带引用时才做）
+    understandEnabled: String(env.UNDERSTAND_ENABLED ?? '1').toLowerCase() !== '0' && String(env.UNDERSTAND_ENABLED ?? '1').toLowerCase() !== 'false',
+    understandMinChars: Math.max(0, Math.floor(num('UNDERSTAND_MIN_CHARS', 12))),
     rateLimitPerHour: Math.max(0, Math.floor(num('RATE_LIMIT_PER_HOUR', 25))),
     // "被@必回 / 私聊"这类不能丢的消息用更高的额度（同一个计数桶、阈值更高）：
     // 否则盯人回复会把额度刷满，@ 消息就被当成超额度丢弃，表现为"有概率不回@"
