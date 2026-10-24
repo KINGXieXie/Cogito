@@ -172,7 +172,10 @@ const summaryLLM = new DeepSeekClient({
   logger,
   usageMeter,
   label: useQwenForSummary ? '总结模型(通义千问)' : '总结模型(DeepSeek)',
-  enableThinking: useQwenForSummary && isQwenHybridModel(config.summaryModel) ? config.dashscopeThinking : undefined,
+  // DeepSeek v4 系默认思考：日报输出上限 8000 会被推理 token 吃满，
+  // 实测 10-23 两次 23:00/23:30 都报"达到输出 token 上限"、报告发不出去。
+  // 写报告不需要内心戏，关掉思考（千问仍按原配置传 enable_thinking）。
+  enableThinking: useQwenForSummary && isQwenHybridModel(config.summaryModel) ? config.dashscopeThinking : false,
 })
 
 const wsUrl = config.onebotAccessToken
