@@ -1,5 +1,12 @@
 # 更新日志
 
+## 2.11.0 — 2026-10-25
+
+- 修复识图偶发"返回空描述"：DeepSeek 视觉模型默认会生成推理 token（实测一句话就 63 个），读图预算容易被内心戏吃光。现在视觉客户端也关闭思考，读图默认输出预算从 400 提到 600；连续两次都空时，换更短的引导语再试一次（`VISION_DESCRIBE_ASK_SHORT`）。
+- 新增群总结失败告警：日报失败时写 `data/summary-alerts.json` 与 `logs/alerts.log`，控制台工作台显示红色"最近的群总结失败"（48 小时内有效）；启动时还会补查"昨天日报是否发过"，睡眠/关机错过的会补记一条。新增 `src/summaryAlerts.js` 与离线回归。
+- 文档同步：`docs/ARCHITECTURE.md` 补直接对话相关配置，`docs/MAINTAINER.md` 补"每个 DeepSeek 客户端都要单独关思考"和记忆 85% 目标的坑。
+- 测试：`describeImages` 默认预算变更同步到 `test-model-request.mjs`。
+
 ## 2.10.1 — 2026-10-24
 
 - 修复每日群报告连续失败：总结模型（DeepSeek v4 系）默认生成推理 token，8000 的输出预算被"内心戏"吃满，10-23 23:00 与 23:30 两次都报"达到输出 token 上限"，报告发不出去。现在对 DeepSeek 总结模型也强制 `thinking:{type:'disabled'}`（千问仍按 `enable_thinking`）；实测同一类请求关闭后 completion 从 1186 降到 81。

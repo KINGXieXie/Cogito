@@ -170,7 +170,7 @@ export function mergeRecords(history, captured, startSec, endSec = Infinity) {
   return [...byId.values()].sort((a, b) => a.time - b.time)
 }
 
-export function createDailySummary({ config, logger, onebot, llm, visionLLM, imageCache, loadImage, buildSummaryPromptFn = buildSummaryPrompt }) {
+export function createDailySummary({ config, logger, onebot, llm, visionLLM, imageCache, loadImage, buildSummaryPromptFn = buildSummaryPrompt, onFailure = null }) {
   const running = new Set()
   const queueSend = createSummarySendQueue()
 
@@ -589,6 +589,7 @@ export function createDailySummary({ config, logger, onebot, llm, visionLLM, ima
       logger.info(`群 ${groupId} ${scopeText}报告已发送（${degraded ? '统计版，' : ''}${blocks.length} 块，方式：${how}，耗时 ${cost}s）`)
     } catch (err) {
       logger.error(`群 ${groupId} 总结失败：${err?.stack || err}`)
+      try { onFailure?.({ groupId, stage: stage || 'unknown', error: err }) } catch { /* 告警失败不影响主流程 */ }
       if (!dryRun && (!scheduled || (!ambiguousSummarySend(err) && await summarySchedule.online()))) {
         // 让群里知道总结失败，别让群友干等
         try {
@@ -658,6 +659,23 @@ export function createDailySummary({ config, logger, onebot, llm, visionLLM, ima
     }
   }
 
+  /**
+   * 启动时补一条"昨天日报没发出去"的告警：睡眠/关机错过 23:00 时，
+   * 当时没有进程，也就没有 bot.log 和失败通知；只能事后补记。
+   */
+  function auditMissedReport({ nowMs = Date.now() } = {}) {
+    if (!config.summaryEnabled || !config.summaryFallbackEnabled) return null
+    const y = new Date(nowMs)
+    y.setDate(y.getDate() - 1)
+    const day = dateKey(y)
+    const missing = summaryGroups().filter((gid) => !summarySchedule.hasDelivered(day, gid))
+    if (missing.length === 0) return null
+    const error = new Error(`昨日（${day}）日报未发出：群 ${missing.join('、')}；多为关机或睡眠未运行，不自动追补`)
+    logger.warn(`[定时总结] ${error.message}`)
+    try { onFailure?.({ groupId: missing.join(','), stage: 'missed', error }) } catch { /* 告警失败不影响启动 */ }
+    return { day, groups: missing }
+  }
+
   return { capture, runSummary, runAll, trigger, schedule, stop: summarySchedule.stop,
-    summaryGroups, previewStats, countCaptured, isRunning, checkScheduled: summarySchedule.runSlot }
+    summaryGroups, previewStats, countCaptured, isRunning, checkScheduled: summarySchedule.runSlot, auditMissedReport }
 }

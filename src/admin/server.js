@@ -9,6 +9,7 @@ import { activatePersona } from '../personaSwitch.js'
 import { applyConversationSettings, resetConversationMemory } from '../conversationSessions.js'
 import { writeTextAtomic } from '../stateFile.js'
 import { normalizeSpeechHabits, speechHabitsFile, SPEECH_HABITS_MAX } from '../speechHabits.js'
+import { readLatestSummaryAlert } from '../summaryAlerts.js'
 import { loginSnapshot, napcatCall, findWebuiConfig, readWebuiSettings, findQrImage } from '../napcatLogin.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -374,6 +375,8 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
         replied: runtimeStats?.totalReplied ?? 0,
         skipped: runtimeStats?.totalSkipped ?? 0,
       },
+      // 最近一次群总结失败（48 小时内有效）：工作台用红色提示，避免"报告没发也不知道"
+      summaryAlert: readLatestSummaryAlert(config.dataDir),
       config: {
         whitelist: [...config.whitelistGroups],
         proactiveRate: config.proactiveRate,

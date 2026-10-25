@@ -29,6 +29,7 @@ import {
 import {
   VISION_DESCRIBE_PROMPT,
   VISION_DESCRIBE_ASK,
+  VISION_DESCRIBE_ASK_SHORT,
   IMAGE_NOT_LOADED_NOTE,
   sanitizeImageDescription,
   buildImageContextNote,
@@ -1079,13 +1080,25 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
             if (!result) throw new Error('识图接口返回空描述')
             return result
           }
+          // 连读两次都空时，换更短的引导语再试一次：长提示词容易让模型把预算花在措辞上
+          const readDescriptionShort = async () => {
+            const raw = await visionLLM.describeImages(VISION_DESCRIBE_PROMPT, VISION_DESCRIBE_ASK_SHORT, imageParts, { maxTokens: 800 })
+            const result = sanitizeImageDescription(raw)
+            if (!result) throw new Error('短提示词重试仍返回空描述')
+            return result
+          }
           const readWithRetry = async () => {
             try {
               return await readDescription()
             } catch (visionErr) {
               logger.warn(`视觉识图失败，2 秒后重试：${visionErr.message}`)
               await new Promise((r) => setTimeout(r, 2000))
-              return await readDescription()
+              try {
+                return await readDescription()
+              } catch (secondErr) {
+                logger.warn(`视觉识图再次失败，换短提示词再试：${secondErr.message}`)
+                return await readDescriptionShort()
+              }
             }
           }
           try {

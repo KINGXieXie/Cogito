@@ -122,7 +122,7 @@ export class DeepSeekClient {
    * 刻意**不带聊天历史、不给人设**——它就只干读图这一件事，写回复是文字模型的活
    * （原因见 src/visionNote.js：让它直接写回复时，它会对着聊天记录截图写出一整篇分析报告）。
    */
-  async describeImages(systemPrompt, textContent, imageParts, { maxTokens = 400, temperature = 0.3, signal } = {}) {
+  async describeImages(systemPrompt, textContent, imageParts, { maxTokens = 600, temperature = 0.3, signal } = {}) {
     const content = []
     if (textContent) content.push({ type: 'text', text: textContent })
     content.push(...imageParts)

@@ -26,7 +26,7 @@ try {
     const c=client({enableThinking:false})
     await c.chat('p',[]);await c.chatRaw([]);await c.chatVision('p',[],'u',[]);await c.describeImages('p','u',[])
     assert.equal(bodies.length,4);assert.ok(bodies.every(body=>body.enable_thinking===false))
-    assert.equal(bodies[0].max_tokens,12000);assert.equal(bodies[3].max_tokens,400)
+    assert.equal(bodies[0].max_tokens,12000);assert.equal(bodies[3].max_tokens,600)
   })
   await test('不配置思考时不发送扩展字段，显式开启时尊重设置', async () => {
     const bodies=[]

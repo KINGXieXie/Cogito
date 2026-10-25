@@ -19,6 +19,7 @@ const scripts = [
   'test-chat-appendix.mjs',
   'test-speech-habits.mjs',
   'test-napcat-login.mjs',
+  'test-summary-alerts.mjs',
   'test-persona-memory.mjs',
   'test-long-memory-budget.mjs',
   'test-private-profiles.mjs',

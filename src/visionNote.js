@@ -20,6 +20,9 @@ export const VISION_DESCRIBE_PROMPT = `你是图片理解助手。看图片，�
 /** 读图时附在图片前的引导语 */
 export const VISION_DESCRIBE_ASK = '这张图片里是什么？'
 
+/** 前两次都失败时的兜底引导语：更短、更直接，避免模型把预算花在组织语言上 */
+export const VISION_DESCRIBE_ASK_SHORT = '用一两句话说明图里有什么，有文字就照抄。'
+
 /** 读图失败时的补救说明（盖掉前面那条"你已经看到了"） */
 export const IMAGE_NOT_LOADED_NOTE =
   '\n\n【图片状态】这条消息带了图，但内容没能取到，你看不到画面。可以自然地说一句图没加载出来，一句就够，别多解释。'

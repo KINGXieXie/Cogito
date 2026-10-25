@@ -12,6 +12,7 @@ import { createImageCache } from './imageCache.js'
 import { loadVisionKnowledge, createGroundedVisionClient } from './visionKnowledge.js'
 import { createSummaryVisionClient } from './summaryReferences.js'
 import { createDailySummary, buildSummaryPrompt } from './dailySummary.js'
+import { recordSummaryAlert } from './summaryAlerts.js'
 import { createWebSearch } from './search.js'
 import { loadPokeReplies, createPokeReplier } from './pokeReplies.js'
 import { createLongMemory } from './longMemory.js'
@@ -152,7 +153,10 @@ if (config.visionProvider === 'deepseek' ? config.deepseekApiKey : config.dashsc
     maxConcurrency: config.maxConcurrency,
     logger,
     label: isDeepseek ? 'DeepSeek 视觉' : '通义千问VL',
-    enableThinking: !isDeepseek && isQwenHybridModel(config.dashscopeModel) ? config.dashscopeThinking : undefined,
+    // DeepSeek 视觉模型默认也会"思考"：实测一句话就产生 63 个推理 token，
+    // 读图预算只有 400，复杂图片容易被内心戏吃光、返回空描述（日志里的"识图接口返回空描述"）。
+    // 读图只需要事实，不需要推理：DeepSeek 一律关掉；千问仍按原配置。
+    enableThinking: isDeepseek ? false : (isQwenHybridModel(config.dashscopeModel) ? config.dashscopeThinking : undefined),
   })
 }
 
@@ -230,7 +234,15 @@ const summaryChat = async (prompt, messages, options) => summaryLLM.chat(prompt,
 
 const dailySummary = createDailySummary({ config, logger, onebot, llm: { chat: summaryChat },
   visionLLM: summaryVisionLLM, imageCache: sharedImageCache,
-  loadImage: (image, signal) => imageToDataUrl(image, onebot, config, logger, {signal}), buildSummaryPromptFn: summaryPromptFn })
+  loadImage: (image, signal) => imageToDataUrl(image, onebot, config, logger, {signal}), buildSummaryPromptFn: summaryPromptFn,
+  // 日报失败时留痕到 data/summary-alerts.json + logs/alerts.log，控制台工作台会显示
+  onFailure: ({ groupId, stage, error }) => recordSummaryAlert({
+    dataDir: config.dataDir, logDir: config.logDir, groupId, stage,
+    message: error?.message || String(error || '未知错误'), logger,
+  }),
+})
+// 睡眠/关机错过 23:00 时当场没有日志；启动时补记"昨天没发出去"
+try { dailySummary.auditMissedReport?.() } catch (err) { logger.warn(`补查昨日日报失败：${err.message}`) }
 
 const systemPrompt = createChatPromptBuilder({ config, longMemory, todayNote: key => dailyPing?.todayNote?.(key) ?? '' })
 

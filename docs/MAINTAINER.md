@@ -66,7 +66,8 @@ git push origin v<version>
 ## 4. 已知坑（都踩过）
 
 1. **思考开关**：`enable_thinking` 是通义千问的参数，DeepSeek v4 系**会被静默忽略**并继续生成推理 token。给 DeepSeek 关思考必须发 `thinking:{type:'disabled'}`（`deepseek.js` 已按厂商分流）。长期记忆关闭后，同一整理请求 completion 从 1186 → 81。
-2. **长期记忆死循环**：摘要顶到 `LONG_MEMORY_MAX_CHARS` 后若"超预算就整批回滚"，每个整理周期都会白烧一次完整生成（10-20 实测一天 ¥2.5）。现在超预算先压缩、再按行截断，永远前进。
+2. **每个 DeepSeek 客户端都要单独关思考**：聊天、记忆、**日报总结**、**视觉读图** 是四个独立客户端。日报曾因总结模型思考吃满 8000 输出预算、连续两天发不出去（10-23 实测）；视觉读图也会因推理 token 返回空描述。新增模型客户端时先想清楚要不要思考。
+3. **长期记忆死循环**：摘要顶到 `LONG_MEMORY_MAX_CHARS` 后若"超预算就整批回滚"，每个整理周期都会白烧一次完整生成（10-20 实测一天 ¥2.5）。现在超预算先压缩、再按行截断，永远前进；提示词按上限的 85% 给目标，减少"压缩后仍超预算"的截断（会丢尾部事实）。
 3. **控制台 404**：`api()` 早先"不带 body 就 GET"，而动作只收 POST，新页面会整页 404。现在 `/api/action/*` 一律 POST；新增调用照旧传 `{}` 最稳。
 4. **测试锁提示词**：`conversationRules` 里两句安全条款被精确匹配/断言；`chatAppendix` 也有条款断言与字数上限。改措辞前先 `grep -r "断言里的片段" scripts/`。
 5. **编码**：源文件与 `.env` 都是 **UTF-8 无 BOM**；PowerShell 写文件用 `[IO.File]::WriteAllText(path, text, UTF8Encoding($false))`；用 `Invoke-WebRequest` 给控制台发中文时 body 要用 UTF-8 字节，否则中文变 `?`。
