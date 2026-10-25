@@ -17,6 +17,8 @@ import { createQuotedMessageResolver } from './quotedMessage.js'
 import { renderFacesToCq } from './qqFace.js'
 import { limitDecorationLines, hasDecoration, typingDelay, thinkDelayMs, isQuietHour } from './humanize.js'
 import { measureText, backlogLength, planReply, shapeReply, shapeHint, decorationHint, ensureDecoration, pickDecorationKind, asksForAnalysis, asksForQuestion } from './replyShape.js'
+import { selectHistory } from './contextSelect.js'
+import { shouldRecall, buildRecallNote } from './contextRecall.js'
 import {
   checkMembers,
   buildReminderMessages,
@@ -289,7 +291,7 @@ const SEARCH_TOOLS = [{
 // 明确的"长内容"请求：背诗、念课文、逐条列、完整讲——这类不受长度匹配压制。
 const LONG_FORM_RE = /背(?:一首|首|诗|课文|一段)|念(?:一首|首诗|诗)|朗诵|来一首|写一首|逐条|一条一条|每行(?:一|只|一句)|依次列出|完整地?(?:说|讲|列)/
 
-export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt, dailySummary, dailyPing, webSearch, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory, rand = Math.random }) {
+export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt, dailySummary, dailyPing, webSearch, recall, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory, rand = Math.random }) {
   const imageCache = sharedImageCache ?? (config.dataDir && config.visionCacheEnabled !== false ? createImageCache({
     dir: path.join(config.dataDir, 'image-cache'),
     maxBytes: config.visionCacheMaxBytes,
@@ -972,10 +974,19 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
       logger.info(`[回复]（${decision.reason}）${isPrivate ? '私聊' : `群${groupId}`} ${senderName}：${parsed.text.slice(0, 50)}${quotedTag ? '（含引用）' : ''}${hasImages ? `（含 ${allImages.length} 张图，走视觉模型）` : ''}${enableTools ? '（可联网搜索）' : ''}`)
 
       // history 已包含刚记下的本条消息；各路径会自行追加本条，故这里先排除掉它
-      const history = memory.get(key).slice(-(config.historyLimit || 99))
+      // 即时上下文：普通闲聊取最近 HISTORY_LIMIT 条；被@/引用/私聊给更长的窗口，
+      // 并且不是"简单取最近 N 条"，而是优先保留同话题相关消息（contextSelect）。
+      const stored = memory.get(key)
+      const historyLimit = Math.max(4, directReply
+        ? (config.historyLimitDirect || config.historyLimit || 40)
+        : (config.historyLimit || 20))
+      const history = stored.length > historyLimit
+        ? selectHistory(stored, { limit: historyLimit, text: parsed.text, speaker: senderName, now: Date.now() })
+        : stored.slice(-historyLimit)
       const pushed = remember && config.contextRememberAll
       const hasCurrentId = evt.message_id != null && history.some(m => m.role === 'user' && m.messageId === String(evt.message_id))
-      const rawHistory = pushed ? (hasCurrentId ? history.filter(m => m.role !== 'user' || m.messageId !== String(evt.message_id)) : history.slice(0, -1)) : history.slice()
+      // 相关性挑选可能把"本条消息"排除在外，此时不能按"最后一条就是本条"去切
+      const rawHistory = pushed ? (hasCurrentId ? history.filter(m => m.role !== 'user' || m.messageId !== String(evt.message_id)) : history.slice()) : history.slice()
       const baseHistory = modelHistory(rawHistory)
 
       // 先把图片取下来。顺带确定"这条消息的图到底看不看得见"——这件事**代码知道，模型不知道**。
@@ -1041,6 +1052,20 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         imageNote +
         shapeHint(plan) +
         decorationHint(allowDecoration, decoKind, decorationPreset)
+      // 旧事检索：只在消息里出现"上次/记得/之前"这类回忆词时才去翻记录，平时不花 token
+      if (config.recallEnabled && groupId && typeof recall === 'function' && shouldRecall(parsed.text)) {
+        try {
+          const found = recall({ groupKey: `g${groupId}`, text: parsed.text, limit: config.recallMaxItems || 4, excludeNames: [config.botName] })
+          if (found?.length) {
+            systemPrompt += buildRecallNote(found)
+            logger.info(`[回忆] 命中 ${found.length} 条旧记录：${found.map((x) => new Date(x.t).toLocaleDateString('zh-CN')).join('、')}`)
+          } else {
+            logger.debug('[回忆] 出现回忆词，但没有匹配的旧记录')
+          }
+        } catch (err) {
+          logger.warn(`旧事检索失败，按没有旧记录继续：${err.message}`)
+        }
+      }
       const canContinue = () => samePersona() && sameSessionPersona(config, chatSettings, key, sessionPersonaText) &&
         replyStillCurrent(onebot, evt, { latestOnly: !directReply }) && !autoPlusOne.wasTriggered(repetition)
       if (!canContinue()) return

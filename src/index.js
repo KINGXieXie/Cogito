@@ -14,6 +14,7 @@ import { createSummaryVisionClient } from './summaryReferences.js'
 import { createDailySummary, buildSummaryPrompt } from './dailySummary.js'
 import { recordSummaryAlert } from './summaryAlerts.js'
 import { createWebSearch } from './search.js'
+import { createRecallIndex } from './contextRecall.js'
 import { loadPokeReplies, createPokeReplier } from './pokeReplies.js'
 import { createLongMemory } from './longMemory.js'
 import { createCustomCommands } from './customCommands.js'
@@ -112,7 +113,7 @@ try {
 }
 
 const usageMeter = createUsageMeter({ file: path.join(config.dataDir, 'usage.json'), logger })
-const memory = new MemoryStore({ file: config.memoryFile, limit: config.historyLimit, logger })
+const memory = new MemoryStore({ file: config.memoryFile, limit: Math.max(config.historyLimit, config.historyLimitDirect || 0), logger })
 memory.load()
 
 const llm = new DeepSeekClient({
@@ -221,6 +222,20 @@ const commandCenter = createCommandCenter({file:path.join(config.dataDir,'comman
 // 联网搜索（百度千帆）：仅私聊与被@时可用，模型自行判断是否需要
 const webSearch = createWebSearch({ apiKey: config.baiduApiKey, timeoutMs: 20000, logger })
 
+// 旧事检索：从 data/daily 原始记录里翻相关片段（只在"上次/记得"这类消息上触发）
+const recallIndex = config.recallEnabled
+  ? createRecallIndex({ dataDir: config.dataDir, days: config.recallDays, logger })
+  : null
+// 启动后后台预建索引：第一次触发旧事检索时不用现场扫几万条记录
+if (recallIndex) {
+  setTimeout(() => {
+    try {
+      recallIndex.refresh()
+      logger.info(`旧事检索索引就绪：${recallIndex.size} 条记录（近 ${config.recallDays} 天）`)
+    } catch (err) { logger.warn(`旧事检索索引预建失败：${err.message}`) }
+  }, 3000)
+}
+
 // 总结提示词：先注入当前实例人格，再给出报告格式与统计要求。
 const summaryPromptFn = (opts) => {
   const personaPart = config.persona
@@ -291,7 +306,7 @@ const runtimeStats = {
   },
 }
 
-const bot = createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt: systemPrompt, dailySummary, dailyPing, webSearch, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory })
+const bot = createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt: systemPrompt, dailySummary, dailyPing, webSearch, recall: recallIndex?.recall, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory })
 
 // 本地控制台：机器人自己托管界面，用 Edge/Chrome 的 app 模式窗口打开就像一个桌面应用
 let adminServer = null

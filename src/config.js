@@ -323,6 +323,14 @@ export function loadConfig() {
     lineGapMinMs: Math.max(0, Math.floor(num('LINE_GAP_MIN_MS', 500))),
     lineGapMaxMs: Math.max(0, Math.floor(num('LINE_GAP_MAX_MS', 1600))),
     historyLimit: Math.max(4, Math.min(200, Math.floor(num('HISTORY_LIMIT', 20)))),
+    // 被@/引用/私聊时给更长的即时上下文（普通闲聊仍按 HISTORY_LIMIT，省 token）
+    historyLimitDirect: Math.max(4, Math.min(200, Math.floor(num('HISTORY_LIMIT_DIRECT', 40)))),
+    // 旧事检索：从 data/daily 的原始记录里捞相关片段（只在消息里出现"上次/记得"这类词时触发）
+    recallEnabled: String(env.RECALL_ENABLED ?? '1').toLowerCase() !== '0' && String(env.RECALL_ENABLED ?? '1').toLowerCase() !== 'false',
+    recallDays: Math.max(1, Math.min(90, Math.floor(num('RECALL_DAYS', 14)))),
+    recallMaxItems: Math.max(1, Math.min(8, Math.floor(num('RECALL_MAX_ITEMS', 4)))),
+    // 原始消息保留天数（日报清理；也是旧事检索能回看的范围上限）
+    summaryRetentionDays: Math.max(1, Math.min(120, Math.floor(num('SUMMARY_RETENTION_DAYS', 7)))),
     // 上下文记忆：是否把"机器人没回复"的消息也记入上下文（让它像真人一样在场）
     contextRememberAll: String(env.CONTEXT_REMEMBER_ALL ?? '1').toLowerCase() !== '0' && String(env.CONTEXT_REMEMBER_ALL ?? '1').toLowerCase() !== 'false',
     // 长期记忆：被挤出近期窗口的旧消息压缩成摘要（可持续累积，记住远超窗口的内容）

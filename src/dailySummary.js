@@ -634,13 +634,13 @@ export function createDailySummary({ config, logger, onebot, llm, visionLLM, ima
     cleanupOld()
   }
 
-  /** 清理 7 天前的原始消息文件 */
+  /** 清理超过保留期的原始消息文件（默认 7 天，可配 SUMMARY_RETENTION_DAYS） */
   function cleanupOld() {
     try {
       const root = path.join(config.dataDir, 'daily')
       if (!existsSync(root)) return
       const cutoff = new Date()
-      cutoff.setDate(cutoff.getDate() - 7)
+      cutoff.setDate(cutoff.getDate() - Math.max(1, config.summaryRetentionDays || 7))
       for (const groupDir of readdirSync(root)) {
         const dir = path.join(root, groupDir)
         try {

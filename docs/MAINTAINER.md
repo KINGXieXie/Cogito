@@ -68,13 +68,14 @@ git push origin v<version>
 1. **思考开关**：`enable_thinking` 是通义千问的参数，DeepSeek v4 系**会被静默忽略**并继续生成推理 token。给 DeepSeek 关思考必须发 `thinking:{type:'disabled'}`（`deepseek.js` 已按厂商分流）。长期记忆关闭后，同一整理请求 completion 从 1186 → 81。
 2. **每个 DeepSeek 客户端都要单独关思考**：聊天、记忆、**日报总结**、**视觉读图** 是四个独立客户端。日报曾因总结模型思考吃满 8000 输出预算、连续两天发不出去（10-23 实测）；视觉读图也会因推理 token 返回空描述。新增模型客户端时先想清楚要不要思考。
 3. **长期记忆死循环**：摘要顶到 `LONG_MEMORY_MAX_CHARS` 后若"超预算就整批回滚"，每个整理周期都会白烧一次完整生成（10-20 实测一天 ¥2.5）。现在超预算先压缩、再按行截断，永远前进；提示词按上限的 85% 给目标，减少"压缩后仍超预算"的截断（会丢尾部事实）。
-3. **控制台 404**：`api()` 早先"不带 body 就 GET"，而动作只收 POST，新页面会整页 404。现在 `/api/action/*` 一律 POST；新增调用照旧传 `{}` 最稳。
-4. **测试锁提示词**：`conversationRules` 里两句安全条款被精确匹配/断言；`chatAppendix` 也有条款断言与字数上限。改措辞前先 `grep -r "断言里的片段" scripts/`。
-5. **编码**：源文件与 `.env` 都是 **UTF-8 无 BOM**；PowerShell 写文件用 `[IO.File]::WriteAllText(path, text, UTF8Encoding($false))`；用 `Invoke-WebRequest` 给控制台发中文时 body 要用 UTF-8 字节，否则中文变 `?`。
-6. **进程单实例**：`data/bot.lock` 记 pid；不要手工再起一个，重启走 `bot-restart.ps1`。
-7. **NapCat 登录**：睡眠/恢复或重启 QQ 会掉登录；控制台「QQ 登录」页可看码、扫码、快速登录。快速登录依赖 QQ 本地 token（`F:\Tencent Files\<uin>\`），列表里可能只有你的主号——登错号机器人不会上线（页面已标红提示）。
-8. **日报**：23:00 未登录会跳过，`SUMMARY_FALLBACK_ENABLED=1` 时 23:30 查漏补发，但要求 QQ 在线；不追补历史。
-9. **数据可恢复性**：清记忆/切人格会写 `data/config-backups/*.json`；原始日报在 `data/daily/`；`data` 里的东西删了就没有第二份。
+4. **控制台 404**：`api()` 早先"不带 body 就 GET"，而动作只收 POST，新页面会整页 404。现在 `/api/action/*` 一律 POST；新增调用照旧传 `{}` 最稳。
+5. **测试锁提示词**：`conversationRules` 里两句安全条款被精确匹配/断言；`chatAppendix` 也有条款断言与字数上限。改措辞前先 `grep -r "断言里的片段" scripts/`。
+6. **编码**：源文件与 `.env` 都是 **UTF-8 无 BOM**；PowerShell 写文件用 `[IO.File]::WriteAllText(path, text, UTF8Encoding($false))`；用 `Invoke-WebRequest` 给控制台发中文时 body 要用 UTF-8 字节，否则中文变 `?`。
+7. **进程单实例**：`data/bot.lock` 记 pid；不要手工再起一个，重启走 `bot-restart.ps1`。
+8. **NapCat 登录**：睡眠/恢复或重启 QQ 会掉登录；控制台「QQ 登录」页可看码、扫码、快速登录。快速登录依赖 QQ 本地 token（`F:\Tencent Files\<uin>\`），列表里可能只有你的主号——登错号机器人不会上线（页面已标红提示）。
+9. **旧事检索**：`src/contextRecall.js` 把 `data/daily` 的近 14 天记录建成 3 字片段索引，只在消息含“上次/记得/之前”等词时注入 3~5 条旧片段（不额外调模型）；命中见 `bot.log` 的 `[回忆]`。索引按 10 分钟自动重建，启动 3 秒后预建。要放宽/收紧召回：`RECALL_DAYS`、`RECALL_MAX_ITEMS`；原始记录保留期 `SUMMARY_RETENTION_DAYS`（默认 7，本机 30）。
+10. **日报**：23:00 未登录会跳过，`SUMMARY_FALLBACK_ENABLED=1` 时 23:30 查漏补发，但要求 QQ 在线；不追补历史。
+11. **数据可恢复性**：清记忆/切人格会写 `data/config-backups/*.json`；原始日报在 `data/daily/`；`data` 里的东西删了就没有第二份。
 
 ## 5. 排障顺序
 
