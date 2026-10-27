@@ -72,7 +72,13 @@ export function createSummarySchedule({ config, logger, onebot, groups, runGroup
   }
 
   function beforeSend(groupId) {
-    if (!enabled() || chinaDate(now()).getHours() < 23) return null
+    if (!enabled()) return null
+    // 只记录"当天的正式报告"发送回执：从当天第一个计划时间开始才算。
+    // 以前写死 23 点，导致把报告时间改到 22:00 后回执永远不落盘，
+    // 第二天启动时误报"昨日日报未发出"（实际 10-26 22:03 已经发出）。
+    const firstTime = configuredTimes()[0] || '23:00'
+    const gateHour = Number(firstTime.slice(0, 2))
+    if (chinaDate(now()).getHours() < gateHour) return null
     const key = deliveryKey(chinaDay(now()), groupId)
     const entry = state.deliveries[key] ?? { confirmed: 0, receiptIds: [] }
     entry.attemptedAt = now()

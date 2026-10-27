@@ -20,6 +20,7 @@ const scripts = [
   'test-speech-habits.mjs',
   'test-napcat-login.mjs',
   'test-summary-alerts.mjs',
+  'test-summary-receipt.mjs',
   'test-context-select.mjs',
   'test-context-recall.mjs',
   'test-persona-memory.mjs',
