@@ -336,6 +336,7 @@ if (config.adminEnabled) {
     customCommands,
     commandCenter,
     usageMeter,
+    riskGuard,
     // 控制台改了表情包文件后立即同步到内存里的库（bot 持有的是同一个数组引用）
     onStickersChanged: () => {
       try {
