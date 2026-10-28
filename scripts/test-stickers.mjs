@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { loadStickers, stickerHint, extractSticker, stickerCq, stickerTagList } from '../src/stickers.js'
+import { loadStickers, stickerHint, extractSticker, stickerCq, stickerTagList, matchEmotionTag, findStickerByTag } from '../src/stickers.js'
 
 const dir = mkdtempSync(path.join(tmpdir(), 'cogito-stickers-'))
 const logger = { info() {}, warn() {} }
@@ -68,6 +68,20 @@ try {
   assert.ok(cq.startsWith('[CQ:image,file=base64://'))
   assert.ok(cq.endsWith(']'))
   assert.equal(stickerCq(path.join(sdir, 'nope.png')), '')
+
+  // 9) 情绪识别（模型偶尔不写标签时的自动补图依据）
+  const emo = [
+    ['开心_猫.png', { tag: '开心' }],
+    ['无语_狗.png', { tag: '无语' }],
+  ]
+  writeFileSync(path.join(sdir, 'manifest.json'), JSON.stringify(emo))
+  const emoLib = loadStickers(dir, logger)
+  assert.equal(matchEmotionTag('今天笑死我了', emoLib), '开心')
+  assert.equal(matchEmotionTag('这也太离谱了', emoLib), '无语')
+  assert.equal(matchEmotionTag('今天天气不错', emoLib), null)
+  assert.equal(matchEmotionTag('笑死我了', []), null)
+  assert.equal(findStickerByTag(emoLib, '开心', () => 0)?.tag, '开心')
+  assert.equal(findStickerByTag(emoLib, '不存在', () => 0), null)
 
   console.log('test-stickers passed')
 } finally {

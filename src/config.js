@@ -296,6 +296,8 @@ export function loadConfig() {
     stickerEnabled: String(env.STICKER_ENABLED ?? '1').toLowerCase() !== '0' && String(env.STICKER_ENABLED ?? '1').toLowerCase() !== 'false',
     stickerCooldownMs: Math.max(0, Math.floor(num('STICKER_COOLDOWN_MS', 120000))),
     stickerMaxPerHour: Math.max(0, Math.floor(num('STICKER_MAX_PER_HOUR', 6))),
+    // 模型没主动写 [表情:标签] 时，按对方消息里的情绪自动补图的概率（0=完全交给模型）
+    stickerAutoRate: Math.min(1, Math.max(0, num('STICKER_AUTO_RATE', 0.35))),
     humanDelayMinMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MIN_MS', 600))),
     humanDelayMaxMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MAX_MS', 2500))),
     // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等

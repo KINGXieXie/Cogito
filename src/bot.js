@@ -19,7 +19,7 @@ import { limitDecorationLines, hasDecoration, typingDelay, thinkDelayMs, isQuiet
 import { measureText, backlogLength, planReply, shapeReply, shapeHint, decorationHint, ensureDecoration, pickDecorationKind, asksForAnalysis, asksForQuestion } from './replyShape.js'
 import { selectHistory } from './contextSelect.js'
 import { shouldRecall, buildRecallNote } from './contextRecall.js'
-import { extractSticker, stickerHint, stickerCq } from './stickers.js'
+import { extractSticker, stickerHint, stickerCq, matchEmotionTag, findStickerByTag } from './stickers.js'
 import {
   checkMembers,
   buildReminderMessages,
@@ -1179,6 +1179,11 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
           const parsedSticker = extractSticker(reply, stickers, rand)
           reply = parsedSticker.text
           sticker = parsedSticker.sticker
+          // 模型这次没给标签时，按对方消息里的情绪有概率补一张（模型常忘了写标记）
+          if (!sticker && (config.stickerAutoRate || 0) > 0) {
+            const moodTag = matchEmotionTag(parsed.text, stickers)
+            if (moodTag && rand() < config.stickerAutoRate) sticker = findStickerByTag(stickers, moodTag, rand)
+          }
         }
         // 第一条的普通回复可能仍在生成；复读段已触发时取消这条迟到的搭话。
         if (!canContinue()) return
