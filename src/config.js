@@ -292,6 +292,10 @@ export function loadConfig() {
 
     // 拟人化与反检测
     emojiKeepRate: Math.min(1, Math.max(0, num('EMOJI_KEEP_RATE', 0.2))),
+    // 表情包：模型在回复末尾写 [表情:标签]，系统换成图片发出去
+    stickerEnabled: String(env.STICKER_ENABLED ?? '1').toLowerCase() !== '0' && String(env.STICKER_ENABLED ?? '1').toLowerCase() !== 'false',
+    stickerCooldownMs: Math.max(0, Math.floor(num('STICKER_COOLDOWN_MS', 120000))),
+    stickerMaxPerHour: Math.max(0, Math.floor(num('STICKER_MAX_PER_HOUR', 6))),
     humanDelayMinMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MIN_MS', 600))),
     humanDelayMaxMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MAX_MS', 2500))),
     // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等

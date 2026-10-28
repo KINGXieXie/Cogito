@@ -15,6 +15,7 @@ import { createDailySummary, buildSummaryPrompt } from './dailySummary.js'
 import { recordSummaryAlert } from './summaryAlerts.js'
 import { createWebSearch } from './search.js'
 import { createRecallIndex } from './contextRecall.js'
+import { loadStickers, stickerTagList } from './stickers.js'
 import { loadPokeReplies, createPokeReplier } from './pokeReplies.js'
 import { createLongMemory } from './longMemory.js'
 import { createCustomCommands } from './customCommands.js'
@@ -226,6 +227,13 @@ const webSearch = createWebSearch({ apiKey: config.baiduApiKey, timeoutMs: 20000
 const recallIndex = config.recallEnabled
   ? createRecallIndex({ dataDir: config.dataDir, days: config.recallDays, logger })
   : null
+// 表情包库（data/stickers/）：模型写 [表情:标签]，bot 换成图片发出去
+const stickerLibrary = config.stickerEnabled ? loadStickers(config.dataDir, logger) : []
+if (config.stickerEnabled) {
+  logger.info(stickerLibrary.length
+    ? `表情包库：${stickerLibrary.length} 张（标签：${stickerTagList(stickerLibrary).join('、')}）｜冷却 ${Math.round(config.stickerCooldownMs / 1000)}s、每小时 ≤${config.stickerMaxPerHour} 张`
+    : '表情包库为空：把图片放进 data/stickers/ 并（可选）写 manifest.json 即可使用')
+}
 // 启动后后台预建索引：第一次触发旧事检索时不用现场扫几万条记录
 if (recallIndex) {
   setTimeout(() => {
@@ -306,7 +314,7 @@ const runtimeStats = {
   },
 }
 
-const bot = createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt: systemPrompt, dailySummary, dailyPing, webSearch, recall: recallIndex?.recall, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory })
+const bot = createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt: systemPrompt, dailySummary, dailyPing, webSearch, recall: recallIndex?.recall, stickers: stickerLibrary, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory })
 
 // 本地控制台：机器人自己托管界面，用 Edge/Chrome 的 app 模式窗口打开就像一个桌面应用
 let adminServer = null

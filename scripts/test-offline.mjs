@@ -23,6 +23,7 @@ const scripts = [
   'test-summary-receipt.mjs',
   'test-context-select.mjs',
   'test-context-recall.mjs',
+  'test-stickers.mjs',
   'test-persona-memory.mjs',
   'test-long-memory-budget.mjs',
   'test-private-profiles.mjs',
