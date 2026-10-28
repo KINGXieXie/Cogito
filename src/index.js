@@ -334,6 +334,17 @@ if (config.adminEnabled) {
     customCommands,
     commandCenter,
     usageMeter,
+    // 控制台改了表情包文件后立即同步到内存里的库（bot 持有的是同一个数组引用）
+    onStickersChanged: () => {
+      try {
+        const next = config.stickerEnabled ? loadStickers(config.dataDir, logger) : []
+        stickerLibrary.length = 0
+        stickerLibrary.push(...next)
+        logger.info(`表情包库已刷新：${stickerLibrary.length} 张（标签：${stickerTagList(stickerLibrary).join('、') || '无'}）`)
+      } catch (err) {
+        logger.warn(`表情包库刷新失败：${err.message}`)
+      }
+    },
     restartBot: () => {
       // 让一个独立进程在 1.2 秒后杀掉当前实例并用计划任务重新拉起（避免自己杀自己杀不干净）
       //

@@ -73,7 +73,7 @@ git push origin v<version>
 6. **编码**：源文件与 `.env` 都是 **UTF-8 无 BOM**；PowerShell 写文件用 `[IO.File]::WriteAllText(path, text, UTF8Encoding($false))`；用 `Invoke-WebRequest` 给控制台发中文时 body 要用 UTF-8 字节，否则中文变 `?`。
 7. **进程单实例**：`data/bot.lock` 记 pid；不要手工再起一个，重启走 `bot-restart.ps1`。
 8. **NapCat 登录**：睡眠/恢复或重启 QQ 会掉登录；控制台「QQ 登录」页可看码、扫码、快速登录。快速登录依赖 QQ 本地 token（`F:\Tencent Files\<uin>\`），列表里可能只有你的主号——登错号机器人不会上线（页面已标红提示）。
-9. **表情包**：模型在回复末尾写 [表情:标签]，src/stickers.js 负责换成图片（base64 CQ）；图片放 data/stickers/，manifest.json 可覆盖标签/说明，缺省用文件名第一段当标签。触发有冷却（STICKER_COOLDOWN_MS）与每小时上限（STICKER_MAX_PER_HOUR），正文里不会出现标记。想加自己的表情包：直接把图丢进目录、删掉 manifest 里没有的项即可（或补一行 tag）。
+9. **表情包**：模型在回复末尾写 [表情:标签]，src/stickers.js 负责换成图片（base64 CQ）；图片放 data/stickers/，manifest.json 可覆盖标签/说明，缺省用文件名第一段当标签。触发有冷却（STICKER_COOLDOWN_MS）与每小时上限（STICKER_MAX_PER_HOUR），正文里不会出现标记。想加自己的表情包：直接用控制台「表情包库」页上传/改标签/删除（立即生效）；也可以把图丢进目录、删掉 manifest 里没有的项（或补一行 tag），重启后生效。
 10. **旧事检索**：`src/contextRecall.js` 把 `data/daily` 的近 14 天记录建成 3 字片段索引，只在消息含“上次/记得/之前”等词时注入 3~5 条旧片段（不额外调模型）；命中见 `bot.log` 的 `[回忆]`。索引按 10 分钟自动重建，启动 3 秒后预建。要放宽/收紧召回：`RECALL_DAYS`、`RECALL_MAX_ITEMS`；原始记录保留期 `SUMMARY_RETENTION_DAYS`（默认 7，本机 30）。
 11. **日报**：23:00 未登录会跳过，`SUMMARY_FALLBACK_ENABLED=1` 时 23:30 查漏补发，但要求 QQ 在线；不追补历史。
 12. **数据可恢复性**：清记忆/切人格会写 `data/config-backups/*.json`；原始日报在 `data/daily/`；`data` 里的东西删了就没有第二份。

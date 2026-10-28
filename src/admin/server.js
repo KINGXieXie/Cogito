@@ -10,6 +10,8 @@ import { applyConversationSettings, resetConversationMemory } from '../conversat
 import { writeTextAtomic } from '../stateFile.js'
 import { normalizeSpeechHabits, speechHabitsFile, SPEECH_HABITS_MAX } from '../speechHabits.js'
 import { readLatestSummaryAlert } from '../summaryAlerts.js'
+import { listStickers, saveSticker, updateSticker, deleteSticker } from '../stickerLibrary.js'
+import { stickerDir } from '../stickers.js'
 import { loginSnapshot, napcatCall, findWebuiConfig, readWebuiSettings, findQrImage } from '../napcatLogin.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -183,7 +185,7 @@ function validateGroupConfig(key, value) {
   }
 }
 
-export function createAdminServer({ config, logger, onebot, memory, chatSettings, dailySummary, targetWatch, longMemory, runtimeStats, dailyPing, bot, customCommands, commandCenter, restartBot, usageMeter }) {
+export function createAdminServer({ config, logger, onebot, memory, chatSettings, dailySummary, targetWatch, longMemory, runtimeStats, dailyPing, bot, customCommands, commandCenter, restartBot, usageMeter, onStickersChanged = () => {} }) {
   // 本实例自己的 .env（并行跑两个实例时，写死 rootDir\.env 会改到另一个实例的配置上）
   const envFile = config.envFile || path.join(config.rootDir, '.env')
   const logFile = path.join(config.logDir || path.join(config.rootDir, 'logs'), 'bot.log')
@@ -946,6 +948,25 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
       await targetWatch.tick()
       return { ok: true, pendingBefore: n }
     },
+    // ── 表情包库 ─────────────────────────────────────
+    async 'stickers-list'() {
+      return { ok: true, items: listStickers(config.dataDir, logger) }
+    },
+    async 'stickers-upload'({ name, data, tag }) {
+      const saved = saveSticker({ dataDir: config.dataDir, name, data, tag, logger })
+      onStickersChanged()
+      return { ok: true, saved, items: listStickers(config.dataDir, logger) }
+    },
+    async 'stickers-update'({ name, tag, desc }) {
+      const saved = updateSticker({ dataDir: config.dataDir, name, tag, desc, logger })
+      onStickersChanged()
+      return { ok: true, saved, items: listStickers(config.dataDir, logger) }
+    },
+    async 'stickers-delete'({ name }) {
+      deleteSticker({ dataDir: config.dataDir, name, logger })
+      onStickersChanged()
+      return { ok: true, items: listStickers(config.dataDir, logger) }
+    },
   }
 
   const server = createServer(async (req, res) => {
@@ -960,6 +981,18 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
         if (!existsSync(UI_FILE)) return send(500, '控制台界面文件缺失', 'text/plain; charset=utf-8')
         return send(200, readFileSync(UI_FILE), 'text/html; charset=utf-8')
       }
+      // 表情包缩略图：只允许 data/stickers 下已存在的图片文件
+      if (req.method === 'GET' && url.pathname === '/api/sticker-image') {
+        const name = path.basename(String(url.searchParams.get('name') || ''))
+        const file = path.join(stickerDir(config.dataDir), name)
+        if (!name || !existsSync(file)) return send(404, 'Not Found', 'text/plain; charset=utf-8')
+        const ext = path.extname(file).toLowerCase()
+        const type = ext === '.png' ? 'image/png'
+          : ext === '.gif' ? 'image/gif'
+            : ext === '.webp' ? 'image/webp'
+              : 'image/jpeg'
+        return send(200, readFileSync(file), type)
+      }
       if (url.pathname.startsWith('/api/')) {
         const query = Object.fromEntries(url.searchParams.entries())
         if (req.method === 'GET') {
@@ -972,7 +1005,7 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
             let data = ''
             req.on('data', (c) => {
               data += c
-              if (data.length > 2_000_000) req.destroy()
+              if (data.length > 4_000_000) req.destroy()
             })
             req.on('end', () => {
               try {

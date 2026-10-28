@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { loadStickers, stickerHint, extractSticker, stickerCq, stickerTagList, matchEmotionTag, findStickerByTag } from '../src/stickers.js'
+import { listStickers, saveSticker, updateSticker, deleteSticker, readManifest } from '../src/stickerLibrary.js'
 
 const dir = mkdtempSync(path.join(tmpdir(), 'cogito-stickers-'))
 const logger = { info() {}, warn() {} }
@@ -82,6 +83,33 @@ try {
   assert.equal(matchEmotionTag('笑死我了', []), null)
   assert.equal(findStickerByTag(emoLib, '开心', () => 0)?.tag, '开心')
   assert.equal(findStickerByTag(emoLib, '不存在', () => 0), null)
+
+  // 10) 控制台用的文件操作：上传 / 重名 / 改标签 / 删除 / 校验
+  const lib2 = mkdtempSync(path.join(tmpdir(), 'cogito-lib2-'))
+  try {
+    const saved = saveSticker({ dataDir: lib2, name: '猫猫大笑.png', data: PNG.toString('base64'), logger })
+    assert.equal(saved.name, '猫猫大笑.png')
+    assert.equal(saved.tag, '猫猫大笑', '没有 tag 时文件名第一段就是标签')
+    const dup = saveSticker({ dataDir: lib2, name: '猫猫大笑.png', data: PNG.toString('base64'), logger })
+    assert.notEqual(dup.name, saved.name, '重名要自动改名')
+    const tagged = saveSticker({ dataDir: lib2, name: '随便.png', data: PNG.toString('base64'), tag: '开心', logger })
+    assert.equal(tagged.tag, '开心')
+    assert.equal(listStickers(lib2, logger).length, 3)
+
+    const updated = updateSticker({ dataDir: lib2, name: '猫猫大笑.png', tag: '无语', desc: '无奈时', logger })
+    assert.equal(updated.tag, '无语')
+    assert.equal(readManifest(lib2)['猫猫大笑.png'].desc, '无奈时')
+
+    deleteSticker({ dataDir: lib2, name: '随便.png', logger })
+    assert.equal(listStickers(lib2, logger).some((i) => i.name === '随便.png'), false)
+    assert.equal(readManifest(lib2)['随便.png'], undefined)
+
+    assert.throws(() => saveSticker({ dataDir: lib2, name: 'evil.exe', data: PNG.toString('base64'), logger }), /文件名/)
+    assert.throws(() => saveSticker({ dataDir: lib2, name: 'x.png', data: Buffer.from('not an image').toString('base64'), logger }), /不像图片/)
+    assert.throws(() => saveSticker({ dataDir: lib2, name: 'big.png', data: Buffer.alloc(2 * 1024 * 1024 + 1).toString('base64'), logger }), /太大/)
+  } finally {
+    rmSync(lib2, { recursive: true, force: true })
+  }
 
   console.log('test-stickers passed')
 } finally {

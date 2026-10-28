@@ -171,6 +171,7 @@ const PAGES = [
   ['commands','⌘  指令中心'],
   ['persona','✧  人格编辑'],
   ['style','✎  语言习惯'],
+  ['stickers','▣  表情包库'],
   ['login','⇲  QQ 登录'],
   ['humanize','◉  回复行为'],
   ['api','⌘  模型与接口'],
@@ -762,6 +763,106 @@ function pageMemory(){
     '</section>'
   ].join('')
 }
+// ── 页面：表情包库 ─────────────────────────────────────
+let stickerItems = []
+function stickerCard(it){
+  const nameEnc = encodeURIComponent(it.name)
+  return '<div class="card sticker" data-name="' + esc(it.name) + '" style="padding:12px">' +
+    '<img src="/api/sticker-image?name=' + nameEnc + '&t=' + (it.mtime || 0) + '" alt="" style="width:100%;max-width:180px;max-height:180px;object-fit:contain;border-radius:10px;background:#f4f1ea;display:block;margin:0 auto 10px">' +
+    '<div class="mut" style="font-size:12px;margin-bottom:8px;word-break:break-all">' + esc(it.name) + ' · ' + Math.round((it.size || 0) / 1024) + 'KB</div>' +
+    '<div class="frow" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><label style="width:44px">标签</label><input data-f="tag" value="' + esc(it.tag || '') + '" maxlength="12" style="flex:1"></div>' +
+    '<div class="frow" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><label style="width:44px">说明</label><input data-f="desc" value="' + esc(it.desc || '') + '" maxlength="40" style="flex:1"></div>' +
+    '<div style="display:flex;gap:8px"><button class="btn primary" data-sticker-save>保存</button><button class="btn danger" data-sticker-del>删除</button></div>' +
+    '</div>'
+}
+function pageStickers(){
+  return `<div class="section-head"><h2>表情包库</h2><span class="note">机器人按情绪从这里挑图；改完立即生效，不用重启</span></div>
+  <div class="card" style="margin-bottom:16px">
+    <h3>添加图片</h3>
+    <div class="note">支持 png / jpg / gif / webp，单张 ≤2MB。默认用文件名第一段当标签（如 抱抱_猫.png → 抱抱），也可以先填一个标签再上传。</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <input type="file" id="stickerFiles" accept="image/png,image/jpeg,image/gif,image/webp" multiple>
+      <input type="text" id="stickerTag" placeholder="标签（可选，如 开心）" maxlength="12" style="width:160px">
+      <button class="btn primary" id="stickerUpload">上传</button>
+      <span class="mut" id="stickerUploadHint"></span>
+    </div>
+  </div>
+  <div class="section-head"><h2>已有表情（<span id="stickerCount">${stickerItems.length}</span>）</h2><span class="note">标签决定什么时候发：开心 / 无语 / 震惊 / 抱抱 / 困困 / 饿了</span></div>
+  <div id="stickerGrid" class="grid g3" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${stickerItems.map(stickerCard).join('') || '<div class="empty">还没有表情包，先上传几张吧</div>'}</div>`
+}
+async function loadStickersPage(){
+  try {
+    const r = await api('/api/action/stickers-list', {})
+    stickerItems = r.items || []
+    const grid = document.getElementById('stickerGrid')
+    const count = document.getElementById('stickerCount')
+    if (count) count.textContent = String(stickerItems.length)
+    if (grid) {
+      grid.innerHTML = stickerItems.map(stickerCard).join('') || '<div class="empty">还没有表情包，先上传几张吧</div>'
+      bindStickers()
+    }
+  } catch (e) { toast('读取表情包失败：' + e.message, true) }
+}
+function bindStickers(){
+  const grid = document.getElementById('stickerGrid')
+  if (!grid) return
+  grid.querySelectorAll('[data-sticker-save]').forEach(btn => btn.onclick = async () => {
+    const card = btn.closest('.sticker'); if (!card) return
+    const name = card.dataset.name
+    const tag = card.querySelector('[data-f="tag"]').value
+    const desc = card.querySelector('[data-f="desc"]').value
+    btn.disabled = true
+    try {
+      const r = await api('/api/action/stickers-update', { name, tag, desc })
+      stickerItems = r.items || stickerItems
+      toast('已保存：' + name)
+    } catch (e) { toast('保存失败：' + e.message, true) } finally { btn.disabled = false }
+  })
+  grid.querySelectorAll('[data-sticker-del]').forEach(btn => btn.onclick = async () => {
+    const card = btn.closest('.sticker'); if (!card) return
+    const name = card.dataset.name
+    if (!confirm('删除表情「' + name + '」？图片文件也会删掉。')) return
+    btn.disabled = true
+    try {
+      const r = await api('/api/action/stickers-delete', { name })
+      stickerItems = r.items || []
+      render()
+      toast('已删除')
+    } catch (e) { toast('删除失败：' + e.message, true); btn.disabled = false }
+  })
+  const up = document.getElementById('stickerUpload')
+  if (up) up.onclick = async () => {
+    const input = document.getElementById('stickerFiles')
+    const files = [...(input?.files || [])]
+    if (!files.length) return toast('先选择图片', true)
+    const tag = document.getElementById('stickerTag')?.value.trim() || ''
+    const hint = document.getElementById('stickerUploadHint')
+    up.disabled = true
+    let ok = 0, fail = 0
+    for (const file of files) {
+      if (hint) hint.textContent = '上传中：' + file.name
+      try {
+        const base64 = await new Promise((resolve, reject) => {
+          const fr = new FileReader()
+          fr.onload = () => resolve(String(fr.result || '').split(',').pop())
+          fr.onerror = () => reject(Error('读取失败'))
+          fr.readAsDataURL(file)
+        })
+        const r = await api('/api/action/stickers-upload', { name: file.name, data: base64, tag })
+        stickerItems = r.items || stickerItems
+        ok++
+      } catch (e) { fail++; toast('「' + file.name + '」上传失败：' + e.message, true) }
+    }
+    up.disabled = false
+    if (hint) hint.textContent = '完成：成功 ' + ok + ' 张' + (fail ? '，失败 ' + fail + ' 张' : '')
+    if (ok) {
+      const t = document.getElementById('stickerTag'); if (t) t.value = ''
+      if (input) input.value = ''
+      render()
+    }
+  }
+}
+
 function render(){
   const main = document.getElementById('main')
   let html = ''
@@ -771,6 +872,7 @@ function render(){
   else if (page === 'persona') html = pagePersona()
   else if (page === 'style') html = pageStyle()
   else if (page === 'login') html = pageLogin()
+  else if (page === 'stickers') html = pageStickers()
   else if (page === 'humanize') html = pageHumanize()
   else if (page === 'api') html = pageApi()
   else if (page === 'report') html = pageReport()
@@ -779,6 +881,7 @@ function render(){
   else html = pageData()
   main.innerHTML = html
   bind().catch(e => toast('界面初始化失败：' + e.message, true))
+  if (page === 'stickers') { bindStickers(); loadStickersPage() }
   if (page === 'logs') refreshLogs()
   if (page === 'report' || page === 'data') loadDaily()
 }
