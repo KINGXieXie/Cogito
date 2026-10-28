@@ -313,7 +313,15 @@ function pageOverview(){
   const alertCard = openAlert ? '<section class="card" style="margin-bottom:18px;border-left:3px solid var(--warn)"><h2>⚠ 最近的群总结失败</h2><div class="note">' +
     esc(new Date(Number(openAlert.at)).toLocaleString('zh-CN', { hour12: false })) + ' · 群 ' + esc(openAlert.groupId || '—') + ' · ' + esc(openAlert.stage || '') +
     '<br>' + esc(openAlert.message || '') + '</div><div class="mut" style="font-size:12px;margin-top:6px">失败会同时写入 logs/alerts.log；睡眠或关机错过的日报会在下次启动时补记在这里。</div></section>' : ''
-    return alertCard + adminCard + `
+  const rg = state?.riskGuard
+  const riskCard = (rg && rg.paused)
+    ? '<section class="card" style="margin-bottom:18px;border-left:3px solid var(--warn)"><h2>⛔ 风控自保：已暂停发送</h2><div class="note">' +
+      esc(rg.lastPauseReason || '连续发送失败') + '<br>剩余 ' + Math.ceil((rg.remainingMs || 0) / 60000) + ' 分钟（至 ' +
+      new Date(rg.pauseUntil).toLocaleTimeString('zh-CN', { hour12: false }) + '）</div>' +
+      '<div class="mut" style="font-size:12px;margin-top:6px">连续失败/风控报错时会自动停发并指数退避；确认账号正常可以手动解除。</div>' +
+      '<button class="btn" data-act="risk-reset" style="margin-top:10px">解除暂停</button></section>'
+    : ''
+    return alertCard + riskCard + adminCard + `
   <div class="hero"><span class="hero-status">${dot(b.online === true)} ${accountStatusText(b)}</span>
     <h1>机器人工作台</h1><div class="sub"><span id="updatedAt">${new Date().toLocaleTimeString('zh-CN',{hour12:false})}</span> 更新 · 集中管理运行状态与操作</div></div>
   <div class="note" style="margin:6px 0 12px">${state?.usage?.today ? `今日模型花费 ¥${Number(state.usage.today.cost).toFixed(2)} · ${state.usage.today.calls} 次调用 · 近 7 天 ¥${Number(state.usage.recentCost).toFixed(2)}（本地估算）` : ''}</div>
@@ -893,6 +901,7 @@ async function bind(){
     const prompts = {
       'restart-bot': ['重启机器人？', '机器人会短暂离线，然后由计划任务重新启动。', '重启'],
       'restart-napcat': ['重启 NapCat？', 'QQ 连接会中断一会儿，机器人在恢复连接后继续工作。', '重启'],
+      'risk-reset': ['解除风控暂停？', '解除后会立即恢复发送；如果账号仍被限制，可能马上再次触发暂停。', '解除'],
       'daily-ping': ['立即发送定时指令？', '这会立刻以机器人身份发送 @示例机器人 指令。', '发送'],
     }
     if (prompts[act] && !await ask(...prompts[act])) return

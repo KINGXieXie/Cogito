@@ -15,6 +15,7 @@ import { createDailySummary, buildSummaryPrompt } from './dailySummary.js'
 import { recordSummaryAlert } from './summaryAlerts.js'
 import { createWebSearch } from './search.js'
 import { createRecallIndex } from './contextRecall.js'
+import { createRiskGuard } from './riskGuard.js'
 import { loadStickers, stickerTagList } from './stickers.js'
 import { loadPokeReplies, createPokeReplier } from './pokeReplies.js'
 import { createLongMemory } from './longMemory.js'
@@ -314,7 +315,8 @@ const runtimeStats = {
   },
 }
 
-const bot = createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt: systemPrompt, dailySummary, dailyPing, webSearch, recall: recallIndex?.recall, stickers: stickerLibrary, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory })
+const riskGuard = createRiskGuard({ config, logger })
+const bot = createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt: systemPrompt, dailySummary, dailyPing, webSearch, recall: recallIndex?.recall, stickers: stickerLibrary, riskGuard, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory })
 
 // 本地控制台：机器人自己托管界面，用 Edge/Chrome 的 app 模式窗口打开就像一个桌面应用
 let adminServer = null

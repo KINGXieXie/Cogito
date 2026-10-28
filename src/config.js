@@ -298,6 +298,12 @@ export function loadConfig() {
     stickerMaxPerHour: Math.max(0, Math.floor(num('STICKER_MAX_PER_HOUR', 6))),
     // 模型没主动写 [表情:标签] 时，按对方消息里的情绪自动补图的概率（0=完全交给模型）
     stickerAutoRate: Math.min(1, Math.max(0, num('STICKER_AUTO_RATE', 0.35))),
+    // 风控自保：近期发送失败/风控报错达到阈值就暂停发送（指数退避）
+    riskGuardEnabled: String(env.RISK_GUARD_ENABLED ?? '1').toLowerCase() !== '0' && String(env.RISK_GUARD_ENABLED ?? '1').toLowerCase() !== 'false',
+    riskWindowMs: Math.max(60_000, Math.floor(num('RISK_WINDOW_MS', 10 * 60_000))),
+    riskFailThreshold: Math.max(1, Math.floor(num('RISK_FAIL_THRESHOLD', 3))),
+    riskPauseMs: Math.max(60_000, Math.floor(num('RISK_PAUSE_MS', 15 * 60_000))),
+    riskMaxPauseMs: Math.max(60_000, Math.floor(num('RISK_MAX_PAUSE_MS', 60 * 60_000))),
     humanDelayMinMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MIN_MS', 600))),
     humanDelayMaxMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MAX_MS', 2500))),
     // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等

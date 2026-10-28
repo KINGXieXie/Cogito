@@ -185,7 +185,7 @@ function validateGroupConfig(key, value) {
   }
 }
 
-export function createAdminServer({ config, logger, onebot, memory, chatSettings, dailySummary, targetWatch, longMemory, runtimeStats, dailyPing, bot, customCommands, commandCenter, restartBot, usageMeter, onStickersChanged = () => {} }) {
+export function createAdminServer({ config, logger, onebot, memory, chatSettings, dailySummary, targetWatch, longMemory, runtimeStats, dailyPing, bot, customCommands, commandCenter, restartBot, usageMeter, riskGuard = null, onStickersChanged = () => {} }) {
   // 本实例自己的 .env（并行跑两个实例时，写死 rootDir\.env 会改到另一个实例的配置上）
   const envFile = config.envFile || path.join(config.rootDir, '.env')
   const logFile = path.join(config.logDir || path.join(config.rootDir, 'logs'), 'bot.log')
@@ -379,6 +379,7 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
       },
       // 最近一次群总结失败（48 小时内有效）：工作台用红色提示，避免"报告没发也不知道"
       summaryAlert: readLatestSummaryAlert(config.dataDir),
+      riskGuard: riskGuard?.state?.() ?? null,
       config: {
         whitelist: [...config.whitelistGroups],
         proactiveRate: config.proactiveRate,
@@ -947,6 +948,10 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
       const n = targetWatch.pendingCount?.() ?? 0
       await targetWatch.tick()
       return { ok: true, pendingBefore: n }
+    },
+    async 'risk-reset'() {
+      riskGuard?.reset?.({ full: true })
+      return { ok: true, riskGuard: riskGuard?.state?.() ?? null }
     },
     // ── 表情包库 ─────────────────────────────────────
     async 'stickers-list'() {

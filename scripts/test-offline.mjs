@@ -24,6 +24,7 @@ const scripts = [
   'test-context-select.mjs',
   'test-context-recall.mjs',
   'test-stickers.mjs',
+  'test-risk-guard.mjs',
   'test-persona-memory.mjs',
   'test-long-memory-budget.mjs',
   'test-private-profiles.mjs',

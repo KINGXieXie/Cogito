@@ -292,7 +292,7 @@ const SEARCH_TOOLS = [{
 // 明确的"长内容"请求：背诗、念课文、逐条列、完整讲——这类不受长度匹配压制。
 const LONG_FORM_RE = /背(?:一首|首|诗|课文|一段)|念(?:一首|首诗|诗)|朗诵|来一首|写一首|逐条|一条一条|每行(?:一|只|一句)|依次列出|完整地?(?:说|讲|列)/
 
-export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt, dailySummary, dailyPing, webSearch, recall, stickers = [], pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory, rand = Math.random }) {
+export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt, dailySummary, dailyPing, webSearch, recall, stickers = [], riskGuard = null, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory, rand = Math.random }) {
   const imageCache = sharedImageCache ?? (config.dataDir && config.visionCacheEnabled !== false ? createImageCache({
     dir: path.join(config.dataDir, 'image-cache'),
     maxBytes: config.visionCacheMaxBytes,
@@ -331,13 +331,30 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
     targetWatch?.markReplied(evt.message_id)
   } })
 
+  async function deliver(evt, payload) {
+    if (riskGuard?.paused()) {
+      logger.warn(`[风控自保] 暂停发送中（剩余 ${Math.ceil(riskGuard.remainingMs() / 60000)} 分钟），本条不发送`)
+      return null
+    }
+    try {
+      const receipt = evt.message_type === 'private'
+        ? await onebot.sendPrivate(evt.user_id, payload)
+        : await onebot.sendGroup(evt.group_id, payload)
+      riskGuard?.noteSuccess()
+      return receipt
+    } catch (err) {
+      riskGuard?.noteFailure(err)
+      throw err
+    }
+  }
+
   async function sendTo(evt, text) {
     if (!replyStillCurrent(onebot, evt)) return
     // 把模型写的 [表情:微笑] 转成 QQ 真实表情的 CQ 码
     const outgoing = renderFacesToCq(text)
     for (const piece of splitLongMessage(outgoing)) {
-      const receipt = evt.message_type === 'private' ? await onebot.sendPrivate(evt.user_id, piece) : await onebot.sendGroup(evt.group_id, piece)
-      quotedMessages.rememberSent(evt, receipt, piece)
+      const receipt = await deliver(evt, piece)
+      if (receipt) quotedMessages.rememberSent(evt, receipt, piece)
     }
   }
 
@@ -363,8 +380,8 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
       const outgoing = renderFacesToCq(cleanLine)
       for (const piece of splitLongMessage(outgoing)) {
         if (!canSend()) return sent
-        const receipt = evt.message_type === 'private' ? await onebot.sendPrivate(evt.user_id, piece) : await onebot.sendGroup(evt.group_id, piece)
-        quotedMessages.rememberSent(evt, receipt, piece)
+        const receipt = await deliver(evt, piece)
+        if (receipt) quotedMessages.rememberSent(evt, receipt, piece)
       }
       sent.push(cleanLine)
       rateLimiter?.record(key)
@@ -1236,9 +1253,8 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
             await typingDelay({ min: 300, max: 900 })
             if (canContinue()) {
               try {
-                const receipt = evt.message_type === 'private'
-                  ? await onebot.sendPrivate(evt.user_id, cq)
-                  : await onebot.sendGroup(evt.group_id, cq)
+                const receipt = await deliver(evt, cq)
+                if (!receipt) throw Error('风控暂停中，表情包未发送')
                 quotedMessages.rememberSent(evt, receipt, '')
                 history.push(now)
                 stickerLog.set(key, history)
