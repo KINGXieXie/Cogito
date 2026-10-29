@@ -20,6 +20,7 @@ import { measureText, backlogLength, planReply, shapeReply, shapeHint, decoratio
 import { selectHistory } from './contextSelect.js'
 import { shouldRecall, buildRecallNote } from './contextRecall.js'
 import { extractSticker, stickerHint, stickerCq, matchEmotionTag, findStickerByTag } from './stickers.js'
+import { guardExclusiveNickname } from './nameGuard.js'
 import {
   checkMembers,
   buildReminderMessages,
@@ -1190,6 +1191,8 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         // Markdown/分析文体残留清理（`**加粗**`、`### 标题`、`1. 编号`）——所有回复都过，
         // 因为发到群里它们就是字面的星号和井号，很难看
         reply = stripReportScaffold(reply)
+        // 专属称呼：不是本人发的话，把"当面叫老登"换成"你"，避免把称呼喊到别人身上
+        reply = guardExclusiveNickname(reply, { term: config.exclusiveNickname, speakerId: evt.user_id, ownerUserId: config.ownerUserId })
         // 表情包标记：模型在回复末尾写 [表情:标签]，先摘出来，正文照常裁剪
         let sticker = null
         if (config.stickerEnabled && stickers.length) {

@@ -304,6 +304,10 @@ export function loadConfig() {
     riskFailThreshold: Math.max(1, Math.floor(num('RISK_FAIL_THRESHOLD', 3))),
     riskPauseMs: Math.max(60_000, Math.floor(num('RISK_PAUSE_MS', 15 * 60_000))),
     riskMaxPauseMs: Math.max(60_000, Math.floor(num('RISK_MAX_PAUSE_MS', 60 * 60_000))),
+    // 专属称呼：只有这个 QQ 能被叫 EXCLUSIVE_NICKNAME（例如"老登"），其他人一律不许
+    ownerUserId: String(env.OWNER_USER_ID ?? '').trim(),
+    exclusiveNickname: String(env.EXCLUSIVE_NICKNAME ?? '老登').trim(),
+    ownerName: String(env.OWNER_NAME ?? '蟹蟹').trim(),
     humanDelayMinMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MIN_MS', 600))),
     humanDelayMaxMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MAX_MS', 2500))),
     // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等
