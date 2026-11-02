@@ -308,6 +308,13 @@ export function loadConfig() {
     ownerUserId: String(env.OWNER_USER_ID ?? '').trim(),
     exclusiveNickname: String(env.EXCLUSIVE_NICKNAME ?? '老登').trim(),
     ownerName: String(env.OWNER_NAME ?? '蟹蟹').trim(),
+    // 群内守护：有人反复冒犯主人时，先维护、再犯禁言
+    defenseEnabled: String(env.DEFENSE_ENABLED ?? '0').toLowerCase() !== '0' && String(env.DEFENSE_ENABLED ?? '0').toLowerCase() !== 'false',
+    defenseMuteSeconds: Math.max(10, Math.min(3600, Math.floor(num('DEFENSE_MUTE_SECONDS', 120)))),
+    defenseWindowMs: Math.max(60_000, Math.floor(num('DEFENSE_WINDOW_MS', 7 * 86400000))),
+    defenseAliases: String(env.DEFENSE_ALIASES ?? '叫我蟹蟹就好,蟹蟹,主人,老登').split(',').map((s) => s.trim()).filter(Boolean),
+    defenseWhitelist: String(env.DEFENSE_WHITELIST_USERS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+    defenseLlmConfirm: String(env.DEFENSE_LLM_CONFIRM ?? '1').toLowerCase() !== '0' && String(env.DEFENSE_LLM_CONFIRM ?? '1').toLowerCase() !== 'false',
     humanDelayMinMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MIN_MS', 600))),
     humanDelayMaxMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MAX_MS', 2500))),
     // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等

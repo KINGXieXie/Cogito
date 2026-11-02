@@ -392,6 +392,15 @@ export class OneBotClient extends EventEmitter {
     )
   }
 
+  /** 群禁言/解禁：duration 秒，0 表示解除禁言（需要机器人是管理员） */
+  setGroupBan(groupId, userId, duration, timeoutMs = 10000) {
+    return this.api(
+      'set_group_ban',
+      { group_id: Number(groupId), user_id: Number(userId), duration: Math.max(0, Math.floor(duration)) },
+      timeoutMs
+    )
+  }
+
   /** 按 message_id 取单条消息（用于读取被引用的消息内容；ID 用字符串传递避免精度丢失） */
   getMsg(messageId, timeoutMs = 8000) {
     return this.api('get_msg', { message_id: String(messageId) }, timeoutMs)

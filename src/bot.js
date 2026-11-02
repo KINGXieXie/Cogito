@@ -21,6 +21,7 @@ import { selectHistory } from './contextSelect.js'
 import { shouldRecall, buildRecallNote } from './contextRecall.js'
 import { extractSticker, stickerHint, stickerCq, matchEmotionTag, findStickerByTag } from './stickers.js'
 import { guardExclusiveNickname } from './nameGuard.js'
+import { targetsOwner, hasInsult, pickDefenseLine } from './defense.js'
 import {
   checkMembers,
   buildReminderMessages,
@@ -293,7 +294,7 @@ const SEARCH_TOOLS = [{
 // 明确的"长内容"请求：背诗、念课文、逐条列、完整讲——这类不受长度匹配压制。
 const LONG_FORM_RE = /背(?:一首|首|诗|课文|一段)|念(?:一首|首诗|诗)|朗诵|来一首|写一首|逐条|一条一条|每行(?:一|只|一句)|依次列出|完整地?(?:说|讲|列)/
 
-export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt, dailySummary, dailyPing, webSearch, recall, stickers = [], riskGuard = null, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory, rand = Math.random }) {
+export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: sharedImageCache, memory, buildSystemPrompt, dailySummary, dailyPing, webSearch, recall, stickers = [], riskGuard = null, defense = null, pokeReplier, targetWatch, replyLog, rateLimiter, chatSettings, runtimeStats, customCommands, commandCenter, longMemory, rand = Math.random }) {
   const imageCache = sharedImageCache ?? (config.dataDir && config.visionCacheEnabled !== false ? createImageCache({
     dir: path.join(config.dataDir, 'image-cache'),
     maxBytes: config.visionCacheMaxBytes,
@@ -347,6 +348,60 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
       riskGuard?.noteFailure(err)
       throw err
     }
+  }
+
+  /**
+   * 群内守护：判断这条消息是否"针对主人 + 明确辱骂"。
+   * 先经过关键词粗筛（省 token），命中的少数消息再用模型确认一次；
+   * 确认后：第一次当场维护，第二次起禁言（受保护成员只维护不禁言）。
+   * @returns {Promise<boolean>} true 表示已处理，本条不再走普通聊天回复
+   */
+  async function runDefense(evt, parsed) {
+    const ownerId = String(config.ownerUserId || '')
+    if (!ownerId) return false
+    if (String(evt.user_id) === ownerId) return false
+    const name = evt.sender?.card || evt.sender?.nickname || String(evt.user_id)
+    if (!targetsOwner(evt, parsed, { ownerId, aliases: config.defenseAliases })) return false
+    if (!hasInsult(parsed.text)) return false
+
+    // 模型二次确认：只输出一个"是/否"，避免把玩笑、反串、引用误判成辱骂
+    if (config.defenseLlmConfirm) {
+      try {
+        const answer = await llm.chat(
+          `你是内容安全判断器。判断这句话是否在辱骂、贬低或人身攻击群友「${config.ownerName || '群友'}」。只回答"是"或"否"。`,
+          [{ role: 'user', content: `说话人：${name}\n内容：${parsed.text}` }],
+          { maxTokens: 8 },
+        )
+        if (!/是/.test(String(answer || ''))) return false
+      } catch (err) {
+        logger.warn(`[守护] 模型确认失败，这次先不动：${err.message}`)
+        return false
+      }
+    }
+
+    const role = String(evt.sender?.role || '')
+    const isProtected = role === 'admin' || role === 'owner'
+    const verdict = defense.evaluate({ groupId: evt.group_id, userId: evt.user_id, text: parsed.text, isProtected })
+    if (verdict.action === 'ignore') return false
+
+    // 先维护
+    try {
+      await onebot.sendGroup(evt.group_id, renderFacesToCq(pickDefenseLine(verdict.strikes, rand)))
+    } catch (err) {
+      logger.warn(`[守护] 维护消息发送失败：${err.message}`)
+    }
+
+    if (verdict.action === 'mute') {
+      try {
+        await onebot.setGroupBan(evt.group_id, evt.user_id, verdict.muteSeconds)
+        await onebot.sendGroup(evt.group_id, `（已禁言 ${verdict.muteSeconds} 秒：多次针对「${config.ownerName || '他'}」的言语冒犯）`)
+        logger.info(`[守护] 已禁言 ${name}(${evt.user_id}) ${verdict.muteSeconds} 秒（第 ${verdict.strikes} 次）`)
+      } catch (err) {
+        logger.warn(`[守护] 禁言失败（可能没有管理员权限）：${err.message}`)
+        await onebot.sendGroup(evt.group_id, '（想禁言但没成功……可能我权限不够）').catch(() => {})
+      }
+    }
+    return true
   }
 
   async function sendTo(evt, text) {
@@ -736,6 +791,11 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
 
       // 每日总结：实时捕获群消息（在回复策略之前，未回复的消息也要记）
       dailySummary?.capture(evt, parsed)
+      // 群内守护：有人针对主人辱骂时先维护、再犯禁言（命中后本条不再走普通回复）
+      if (defense && !isPrivate && evt.message_type === 'group' && parsed.text) {
+        const defended = await runDefense(evt, parsed)
+        if (defended) { await repeatTask; return }
+      }
       // 盯人回复：记录目标用户在目标群的发言（每 N 秒统一处理一次）
       targetWatch?.note(evt, parsed)
       // 定时指令的链式判断：等目标账号"成功回应"后补发第二条指令
