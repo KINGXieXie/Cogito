@@ -18,6 +18,28 @@ export function stickerDir(dataDir) {
   return path.join(String(dataDir || '.'), 'stickers')
 }
 
+// 常见场景标签的默认关键词：主人不填 keywords 时也能按话题触发
+export const DEFAULT_TOPIC_KEYWORDS = {
+  好奇: ['为什么', '是什么', '怎么回事', '没听过', '不懂', '好奇', '求科普', '真的假的', '啥意思'],
+  拒绝: ['不要', '不行', '不可以', '拒绝', '别让我', '我不干', '不要嘛'],
+  开玩笑: ['开玩笑', '逗你', '玩梗', '笑死', '哈哈哈', '绷不住', '乐死'],
+  委屈: ['傻', '笨', '欺负', '凶我', '骂我', '委屈', '凭什么'],
+  感谢: ['谢谢', '多谢', '感谢', '辛苦了', '帮大忙', '麻烦你'],
+  卖萌: ['可爱', '摸摸', '捏捏', '蹭蹭', '抱抱', '撒娇', '亲亲'],
+  发呆: ['发呆', '走神', '啊？', '突然想到', '愣住'],
+  吃东西: ['吃', '饭', '外卖', '食堂', '夜宵', '零食', '饿', '好吃', '奶茶'],
+  生气: ['生气', '气死', '谴责', '维护', '不公平', '欺负人'],
+  安慰: ['难过', '丧', '悲观', '心累', '崩溃', '安慰', '心情不好', '压力大'],
+  开心: ['开心', '高兴', '好耶', '快乐', '笑死', '太好了'],
+}
+
+function pickKeywords(meta, tag) {
+  const custom = Array.isArray(meta.keywords) ? meta.keywords : typeof meta.keywords === 'string' ? meta.keywords.split(/[,，\s]+/) : []
+  const list = custom.map((s) => String(s).trim()).filter(Boolean).slice(0, 30)
+  if (list.length) return list
+  return (DEFAULT_TOPIC_KEYWORDS[tag] || []).slice(0, 30)
+}
+
 export function loadStickers(dataDir, logger) {
   const dir = stickerDir(dataDir)
   if (!existsSync(dir)) return []
@@ -34,11 +56,16 @@ export function loadStickers(dataDir, logger) {
     const full = path.join(dir, file)
     const base = file.replace(IMAGE_RE, '')
     const meta = manifest[file] || manifest[base] || {}
+    const tag = String(meta.tag || meta.name || base.split(/[_\-—\s]/)[0] || base).slice(0, 12)
     items.push({
       file: full,
       name: file,
-      tag: String(meta.tag || meta.name || base.split(/[_\-—\s]/)[0] || base).slice(0, 12),
+      tag,
       desc: String(meta.desc || '').slice(0, 40),
+      keywords: pickKeywords(meta, tag),
+      moods: Array.isArray(meta.moods) ? meta.moods.map(String).slice(0, 8) : [],
+      allowStandalone: meta.allowStandalone !== false,
+      weight: Math.max(0.1, Math.min(5, Number(meta.weight) || 1)),
     })
   }
   return items

@@ -13,6 +13,8 @@ import { readLatestSummaryAlert } from '../summaryAlerts.js'
 import { loadDefenseWords, saveDefenseWords, DEFAULT_INSULTS, DEFAULT_ALIASES } from '../defenseWords.js'
 import { listStickers, saveSticker, updateSticker, deleteSticker } from '../stickerLibrary.js'
 import { stickerDir, stickerCq, matchEmotionTag, findStickerByTag } from '../stickers.js'
+import { createTopicTracker } from '../stickerTopics.js'
+import { createStickerScheduler } from '../stickerScheduler.js'
 import { loginSnapshot, napcatCall, findWebuiConfig, readWebuiSettings, findQrImage } from '../napcatLogin.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -994,6 +996,20 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
       logger.info(`[表情包] 测试发送 → ${chosen.name}（${tag || '随机'}）→ QQ ${owner}`)
       return { ok: true, sent: chosen.name, tag: tag || '随机', messageId: receipt?.message_id ?? null }
     },
+    async 'sticker-topic-test'({ messages = [] } = {}) {
+      const items = listStickers(config.dataDir, logger)
+      const nowMs = Date.now()
+      const tracker = createTopicTracker({ windowMs: config.stickerTopicWindowMs, now: () => nowMs })
+      ;(messages || []).forEach((m, i) => tracker.observe({
+        chatKey: 'test', text: typeof m === 'string' ? m : m.text, userId: (m && m.userId) || 'u' + i, at: nowMs, items,
+      }))
+      const candidates = tracker.candidates({ chatKey: 'test', at: nowMs })
+      const sched = createStickerScheduler({ config, logger })
+      const attach = sched.pick({ chatKey: 'test', items, candidates, mode: 'attach', at: nowMs, rand: () => 0.5 })
+      const standalone = sched.pick({ chatKey: 'test', items, candidates, mode: 'standalone', at: nowMs, rand: () => 0 })
+      const brief = (p) => (p ? { tag: p.tag, name: p.item.name, score: Number(p.score.toFixed(2)), strong: p.strong } : null)
+      return { ok: true, candidates, attach: brief(attach), standalone: brief(standalone), standaloneRate: config.stickerStandaloneRate }
+    },
     // ── 表情包库 ─────────────────────────────────────
     async 'stickers-list'() {
       return { ok: true, items: listStickers(config.dataDir, logger) }
@@ -1003,8 +1019,8 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
       onStickersChanged()
       return { ok: true, saved, items: listStickers(config.dataDir, logger) }
     },
-    async 'stickers-update'({ name, tag, desc }) {
-      const saved = updateSticker({ dataDir: config.dataDir, name, tag, desc, logger })
+    async 'stickers-update'({ name, tag, desc, keywords, allowStandalone, weight }) {
+      const saved = updateSticker({ dataDir: config.dataDir, name, tag, desc, keywords, allowStandalone, weight, logger })
       onStickersChanged()
       return { ok: true, saved, items: listStickers(config.dataDir, logger) }
     },

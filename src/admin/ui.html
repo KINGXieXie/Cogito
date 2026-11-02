@@ -788,6 +788,8 @@ function stickerCard(it){
     '<div class="mut" style="font-size:12px;margin-bottom:8px;word-break:break-all">' + esc(it.name) + ' · ' + Math.round((it.size || 0) / 1024) + 'KB</div>' +
     '<div class="frow" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><label style="width:44px">标签</label><input data-f="tag" value="' + esc(it.tag || '') + '" maxlength="12" style="flex:1"></div>' +
     '<div class="frow" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><label style="width:44px">说明</label><input data-f="desc" value="' + esc(it.desc || '') + '" maxlength="40" style="flex:1"></div>' +
+    '<div class="frow" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><label style="width:44px">关键词</label><input data-f="keywords" value="' + esc((it.keywords || []).join(',')) + '" placeholder="逗号分隔，如：吃,饭,外卖" style="flex:1"></div>' +
+    '<label class="mut" style="font-size:12px;display:block;margin-bottom:8px"><input type="checkbox" data-f="allowStandalone" ' + (it.allowStandalone === false ? '' : 'checked') + '> 允许单独发（不跟回复）</label>' +
     '<div style="display:flex;gap:8px"><button class="btn primary" data-sticker-save>保存</button><button class="btn danger" data-sticker-del>删除</button></div>' +
     '</div>'
 }
@@ -816,6 +818,17 @@ function pageStickers(){
     </div>
   </div>
   ${stickerTestHtml()}
+  <div class="card" style="margin-bottom:16px">
+    <h3>话题测试</h3>
+    <div class="note">粘贴最近几条群消息（每行一条），看看会识别成什么话题、会不会发图、发哪张。</div>
+    <textarea id="topicTestInput" style="width:100%;min-height:90px;margin-top:10px;padding:10px;border-radius:8px;border:1px solid #ddd;font-size:13px;box-sizing:border-box" placeholder="今天去吃了那家小馆子\n食堂最近好难吃\n有人一起点外卖吗"></textarea>
+    <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn" id="topicTestRun">识别话题</button>
+      <span class="mut" id="topicTestHint"></span>
+    </div>
+    <div id="topicTestResult" class="note" style="margin-top:10px"></div>
+  </div>
+
   <div class="section-head"><h2>已有表情（<span id="stickerCount">${stickerItems.length}</span>）</h2><span class="note">标签决定什么时候发：开心 / 无语 / 震惊 / 抱抱 / 困困 / 饿了</span></div>
   <div id="stickerGrid" class="grid g3" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${stickerItems.map(stickerCard).join('') || '<div class="empty">还没有表情包，先上传几张吧</div>'}</div>`
 }
@@ -840,9 +853,11 @@ function bindStickers(){
     const name = card.dataset.name
     const tag = card.querySelector('[data-f="tag"]').value
     const desc = card.querySelector('[data-f="desc"]').value
+    const keywords = card.querySelector('[data-f="keywords"]').value
+    const allowStandalone = card.querySelector('[data-f="allowStandalone"]').checked
     btn.disabled = true
     try {
-      const r = await api('/api/action/stickers-update', { name, tag, desc })
+      const r = await api('/api/action/stickers-update', { name, tag, desc, keywords, allowStandalone })
       stickerItems = r.items || stickerItems
       toast('已保存：' + name)
     } catch (e) { toast('保存失败：' + e.message, true) } finally { btn.disabled = false }

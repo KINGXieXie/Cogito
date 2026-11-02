@@ -20,6 +20,8 @@ import { measureText, backlogLength, planReply, shapeReply, shapeHint, decoratio
 import { selectHistory } from './contextSelect.js'
 import { shouldRecall, buildRecallNote } from './contextRecall.js'
 import { extractSticker, stickerHint, stickerCq, matchEmotionTag, findStickerByTag } from './stickers.js'
+import { createTopicTracker } from './stickerTopics.js'
+import { createStickerScheduler } from './stickerScheduler.js'
 import { guardExclusiveNickname } from './nameGuard.js'
 import { targetsOwner, pickDefenseLine } from './defense.js'
 import {
@@ -308,6 +310,19 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
     ...(visionLLM?.knowledgeVersion ? [visionLLM.knowledgeVersion] : [])])
   const failedRecently = new Map() // 私聊报错提示限频：key -> 上次提示时间戳
   const stickerLog = new Map() // 表情包发送记录：key -> 最近发送时间戳数组（冷却 + 每小时上限）
+  // 话题触发与独立调度：表情包不依附回复，按群里在聊的话题决定
+  const topicTracker = createTopicTracker({ windowMs: config.stickerTopicWindowMs })
+  const stickerScheduler = createStickerScheduler({
+    config: {
+      stickerMinGapMs: config.stickerMinGapMs,
+      stickerPerHour: config.stickerPerHour,
+      stickerSameImageMs: config.stickerSameImageMs,
+      stickerTagWindowMs: config.stickerTagWindowMs,
+      stickerTagMax: config.stickerTagMax,
+      stickerStandaloneRate: config.stickerStandaloneRate,
+    },
+    logger,
+  })
   const lastProactive = new Map() // 白名单群主动搭话冷却：groupId -> 上次时间戳
   const lastPoke = new Map() // 拍一拍回应冷却：会话 key -> 上次时间戳
   // 最近一次 /id_check 的结果：groupId -> { group_id, at, bad, kicked }
@@ -791,6 +806,10 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
 
       // 每日总结：实时捕获群消息（在回复策略之前，未回复的消息也要记）
       dailySummary?.capture(evt, parsed)
+      // 表情包话题观察：不管回不回复，先记下群里在聊什么（供独立调度使用）
+      if (config.stickerEnabled && stickers.length && !isPrivate && parsed.text) {
+        topicTracker.observe({ chatKey: `g${groupId}`, text: parsed.text, userId: evt.user_id, items: stickers })
+      }
       // 群内守护：有人针对主人辱骂时先维护、再犯禁言（命中后本条不再走普通回复）
       if (defense && !isPrivate && evt.message_type === 'group' && parsed.text) {
         const defended = await runDefense(evt, parsed)
@@ -1045,6 +1064,28 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
       if (!decision.reply) {
         runtimeStats?.noteSkip?.()
         logger.debug(`忽略消息（${decision.reason}）id=${evt.message_id}`)
+        // 表情包独立逻辑：不回复也可能按"强话题"单独发一张（低概率 + 冷却）
+        if (!isPrivate && config.stickerEnabled && stickers.length) {
+          const pick = stickerScheduler.pick({
+            chatKey: key,
+            items: stickers,
+            candidates: topicTracker.candidates({ chatKey: key }),
+            mode: 'standalone',
+            rand,
+          })
+          if (pick && !isQuietHour(config.quietHours) && !riskGuard?.paused()) {
+            try {
+              const cq = stickerCq(pick.item.file)
+              if (cq) {
+                await onebot.sendGroup(groupId, cq)
+                stickerScheduler.remember(key, pick.item)
+                logger.info(`[表情包] 单独发送：${pick.tag} → ${pick.item.name}（话题 ${pick.score.toFixed(1)}）`)
+              }
+            } catch (err) {
+              logger.warn(`[表情包] 单独发送失败：${err.message}`)
+            }
+          }
+        }
         return
       }
 
@@ -1259,7 +1300,18 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
           const parsedSticker = extractSticker(reply, stickers, rand)
           reply = parsedSticker.text
           sticker = parsedSticker.sticker
-          // 模型这次没给标签时，按对方消息里的情绪有概率补一张（模型常忘了写标记）
+          // 话题优先：群里正在聊的话题命中某张图的关键词，就跟着这条回复一起发
+          if (!sticker && !isPrivate) {
+            const pick = stickerScheduler.pick({
+              chatKey: key,
+              items: stickers,
+              candidates: topicTracker.candidates({ chatKey: key }),
+              mode: 'attach',
+              rand,
+            })
+            if (pick) sticker = pick.item
+          }
+          // 再退一步：按对方消息里的情绪有概率补一张（模型常忘了写标记）
           if (!sticker && (config.stickerAutoRate || 0) > 0) {
             const moodTag = matchEmotionTag(parsed.text, stickers)
             if (moodTag && rand() < config.stickerAutoRate) sticker = findStickerByTag(stickers, moodTag, rand)
@@ -1321,6 +1373,7 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
                 quotedMessages.rememberSent(evt, receipt, '')
                 history.push(now)
                 stickerLog.set(key, history)
+                stickerScheduler.remember(key, sticker, now)
                 logger.info(`[表情包] ${sticker.tag} → ${sticker.name}`)
               } catch (err) {
                 logger.warn(`表情包发送失败：${err.message}`)

@@ -24,6 +24,8 @@ const scripts = [
   'test-context-select.mjs',
   'test-context-recall.mjs',
   'test-stickers.mjs',
+  'test-sticker-topics.mjs',
+  'test-sticker-scheduler.mjs',
   'test-risk-guard.mjs',
   'test-name-guard.mjs',
   'test-defense.mjs',

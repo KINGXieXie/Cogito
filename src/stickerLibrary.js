@@ -68,7 +68,10 @@ export function listStickers(dataDir, logger) {
       size = st.size
       mtime = st.mtimeMs
     } catch { /* 文件刚好被删 */ }
-    return { name: item.name, tag: item.tag, desc: item.desc, size, mtime }
+    return {
+      name: item.name, tag: item.tag, desc: item.desc, size, mtime,
+      keywords: item.keywords, allowStandalone: item.allowStandalone, weight: item.weight,
+    }
   })
 }
 
@@ -90,24 +93,33 @@ export function saveSticker({ dataDir, name, data, tag, logger }) {
   manifest[finalName] = {
     tag: String(tag || manifest[finalName]?.tag || base.split(/[_\-—\s]/)[0] || base).slice(0, 12),
     desc: String(manifest[finalName]?.desc || '').slice(0, 40),
+    allowStandalone: true,
+    weight: 1,
   }
   writeManifest(dataDir, manifest)
   logger?.info?.(`[表情包] 已添加：${finalName}（${(buf.length / 1024).toFixed(0)}KB）`)
   return { name: finalName, tag: manifest[finalName].tag, desc: manifest[finalName].desc, size: buf.length }
 }
 
-export function updateSticker({ dataDir, name, tag, desc, logger }) {
+export function updateSticker({ dataDir, name, tag, desc, keywords, allowStandalone, weight, logger }) {
   const safe = safeName(name)
   if (!safe) throw Error('文件名不合法')
   if (!existsSync(path.join(stickerDir(dataDir), safe))) throw Error('这张图不存在（可能已被删除）')
   const manifest = readManifest(dataDir)
+  const prev = manifest[safe] || {}
+  const kw = Array.isArray(keywords)
+    ? keywords
+    : typeof keywords === 'string' ? keywords.split(/[,，\s]+/) : undefined
   manifest[safe] = {
     tag: String(tag || '').trim().slice(0, 12) || safe.replace(/\.[^.]+$/, '').split(/[_\-—\s]/)[0],
-    desc: String(desc || '').trim().slice(0, 40),
+    desc: String(desc ?? prev.desc ?? '').trim().slice(0, 40),
+    ...(kw ? { keywords: kw.map((s) => String(s).trim()).filter(Boolean).slice(0, 30) } : (prev.keywords ? { keywords: prev.keywords } : {})),
+    allowStandalone: allowStandalone === undefined ? (prev.allowStandalone !== false) : Boolean(allowStandalone),
+    weight: Math.max(0.1, Math.min(5, Number(weight ?? prev.weight) || 1)),
   }
   writeManifest(dataDir, manifest)
-  logger?.info?.(`[表情包] 标签更新：${safe} → ${manifest[safe].tag}`)
-  return { name: safe, tag: manifest[safe].tag, desc: manifest[safe].desc }
+  logger?.info?.(`[表情包] 更新：${safe} → 标签 ${manifest[safe].tag}，关键词 ${(manifest[safe].keywords || []).length} 个`)
+  return { name: safe, ...manifest[safe] }
 }
 
 export function deleteSticker({ dataDir, name, logger }) {

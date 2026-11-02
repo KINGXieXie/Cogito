@@ -298,6 +298,14 @@ export function loadConfig() {
     stickerMaxPerHour: Math.max(0, Math.floor(num('STICKER_MAX_PER_HOUR', 6))),
     // 模型没主动写 [表情:标签] 时，按对方消息里的情绪自动补图的概率（0=完全交给模型）
     stickerAutoRate: Math.min(1, Math.max(0, num('STICKER_AUTO_RATE', 0.35))),
+    // 话题触发（独立于回复逻辑）：关键词命中才算，强话题才能单独发
+    stickerTopicWindowMs: Math.max(60_000, Math.floor(num('STICKER_TOPIC_WINDOW_MS', 5 * 60_000))),
+    stickerMinGapMs: Math.max(0, Math.floor(num('STICKER_MIN_GAP_MS', 180_000))),
+    stickerSameImageMs: Math.max(0, Math.floor(num('STICKER_SAME_IMAGE_MS', 30 * 60_000))),
+    stickerTagWindowMs: Math.max(0, Math.floor(num('STICKER_TAG_WINDOW_MS', 10 * 60_000))),
+    stickerTagMax: Math.max(1, Math.floor(num('STICKER_TAG_MAX', 2))),
+    stickerStandaloneRate: Math.min(1, Math.max(0, num('STICKER_STANDALONE_RATE', 0.1))),
+    stickerPerHour: Math.max(0, Math.floor(num('STICKER_MAX_PER_HOUR', 6))),
     // 风控自保：近期发送失败/风控报错达到阈值就暂停发送（指数退避）
     riskGuardEnabled: String(env.RISK_GUARD_ENABLED ?? '1').toLowerCase() !== '0' && String(env.RISK_GUARD_ENABLED ?? '1').toLowerCase() !== 'false',
     riskWindowMs: Math.max(60_000, Math.floor(num('RISK_WINDOW_MS', 10 * 60_000))),
