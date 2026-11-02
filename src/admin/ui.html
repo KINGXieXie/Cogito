@@ -791,6 +791,18 @@ function stickerCard(it){
     '<div style="display:flex;gap:8px"><button class="btn primary" data-sticker-save>保存</button><button class="btn danger" data-sticker-del>删除</button></div>' +
     '</div>'
 }
+// 在表情包库页面顶部加“发送测试”
+function stickerTestHtml(){
+  return `<div class="card" style="margin-bottom:16px">
+    <h3>发送测试</h3>
+    <div class="note">用一条真实 QQ 私聊消息验证图片能不能发出去（只发给你自己的 QQ，不进群）。</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <input type="text" id="stickerTestText" placeholder="模拟一句话（可选）：笑死我了" maxlength="40" style="width:260px">
+      <button class="btn" id="stickerTestSend">发送测试到我的私聊</button>
+      <span class="mut" id="stickerTestHint"></span>
+    </div>
+  </div>`
+}
 function pageStickers(){
   return `<div class="section-head"><h2>表情包库</h2><span class="note">机器人按情绪从这里挑图；改完立即生效，不用重启</span></div>
   <div class="card" style="margin-bottom:16px">
@@ -803,6 +815,7 @@ function pageStickers(){
       <span class="mut" id="stickerUploadHint"></span>
     </div>
   </div>
+  ${stickerTestHtml()}
   <div class="section-head"><h2>已有表情（<span id="stickerCount">${stickerItems.length}</span>）</h2><span class="note">标签决定什么时候发：开心 / 无语 / 震惊 / 抱抱 / 困困 / 饿了</span></div>
   <div id="stickerGrid" class="grid g3" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${stickerItems.map(stickerCard).join('') || '<div class="empty">还没有表情包，先上传几张吧</div>'}</div>`
 }

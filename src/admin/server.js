@@ -12,7 +12,7 @@ import { normalizeSpeechHabits, speechHabitsFile, SPEECH_HABITS_MAX } from '../s
 import { readLatestSummaryAlert } from '../summaryAlerts.js'
 import { loadDefenseWords, saveDefenseWords, DEFAULT_INSULTS, DEFAULT_ALIASES } from '../defenseWords.js'
 import { listStickers, saveSticker, updateSticker, deleteSticker } from '../stickerLibrary.js'
-import { stickerDir } from '../stickers.js'
+import { stickerDir, stickerCq, matchEmotionTag, findStickerByTag } from '../stickers.js'
 import { loginSnapshot, napcatCall, findWebuiConfig, readWebuiSettings, findQrImage } from '../napcatLogin.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -980,6 +980,19 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
     async 'risk-reset'() {
       riskGuard?.reset?.({ full: true })
       return { ok: true, riskGuard: riskGuard?.state?.() ?? null }
+    },
+    async 'sticker-test'({ text = '' } = {}) {
+      const owner = String(config.ownerUserId || '')
+      if (!owner) throw Error('未配置 OWNER_USER_ID，不知道测试发给谁')
+      const items = listStickers(config.dataDir, logger)
+      if (!items.length) throw Error('表情包库为空，先在页面里上传几张')
+      const tag = text ? matchEmotionTag(text, items) : null
+      const chosen = (tag && findStickerByTag(items, tag)) || items[Math.floor(Math.random() * items.length)]
+      const cq = stickerCq(path.join(stickerDir(config.dataDir), chosen.name))
+      if (!cq) throw Error('图片读取失败（可能被删或超过 3MB）')
+      const receipt = await onebot.sendPrivate(owner, cq)
+      logger.info(`[表情包] 测试发送 → ${chosen.name}（${tag || '随机'}）→ QQ ${owner}`)
+      return { ok: true, sent: chosen.name, tag: tag || '随机', messageId: receipt?.message_id ?? null }
     },
     // ── 表情包库 ─────────────────────────────────────
     async 'stickers-list'() {
