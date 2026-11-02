@@ -185,7 +185,7 @@ function validateGroupConfig(key, value) {
   }
 }
 
-export function createAdminServer({ config, logger, onebot, memory, chatSettings, dailySummary, targetWatch, longMemory, runtimeStats, dailyPing, bot, customCommands, commandCenter, restartBot, usageMeter, riskGuard = null, defenseGuard = null, onStickersChanged = () => {} }) {
+export function createAdminServer({ config, logger, onebot, memory, chatSettings, dailySummary, targetWatch, longMemory, runtimeStats, dailyPing, bot, customCommands, commandCenter, restartBot, usageMeter, riskGuard = null, defenseGuard = null, promptDebugger = null, onStickersChanged = () => {} }) {
   // 本实例自己的 .env（并行跑两个实例时，写死 rootDir\.env 会改到另一个实例的配置上）
   const envFile = config.envFile || path.join(config.rootDir, '.env')
   const logFile = path.join(config.logDir || path.join(config.rootDir, 'logs'), 'bot.log')
@@ -949,6 +949,14 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
       const n = targetWatch.pendingCount?.() ?? 0
       await targetWatch.tick()
       return { ok: true, pendingBefore: n }
+    },
+    async 'prompt-preview'({ chatKey = '', text = '' } = {}) {
+      if (!promptDebugger) throw Error('提示词调试未初始化')
+      return { ok: true, ...promptDebugger.sectionsFor({ chatKey, text }) }
+    },
+    async 'prompt-try'({ chatKey = '', text = '' } = {}) {
+      if (!promptDebugger) throw Error('提示词调试未初始化')
+      return { ok: true, ...(await promptDebugger.tryReply({ chatKey, text })) }
     },
     async 'defense-reset'({ groupId, userId } = {}) {
       defenseGuard?.reset?.(groupId != null && userId != null ? { groupId, userId } : {})

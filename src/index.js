@@ -29,6 +29,7 @@ import { createDailyPing } from './dailyPing.js'
 import { createAdminServer } from './admin/server.js'
 import { createRateLimiter } from './humanize.js'
 import { createChatPromptBuilder } from './chatPrompt.js'
+import { createPromptDebugger } from './promptDebug.js'
 import { createUsageMeter } from './usageMeter.js'
 
 const config = loadConfig()
@@ -269,7 +270,9 @@ const dailySummary = createDailySummary({ config, logger, onebot, llm: { chat: s
 // 睡眠/关机错过 23:00 时当场没有日志；启动时补记"昨天没发出去"
 try { dailySummary.auditMissedReport?.() } catch (err) { logger.warn(`补查昨日日报失败：${err.message}`) }
 
-const systemPrompt = createChatPromptBuilder({ config, longMemory, todayNote: key => dailyPing?.todayNote?.(key) ?? '' })
+const todayNote = (key) => dailyPing?.todayNote?.(key) ?? ''
+const systemPrompt = createChatPromptBuilder({ config, longMemory, todayNote })
+const promptDebugger = createPromptDebugger({ config, longMemory, todayNote, recall: recallIndex?.recall, stickers: stickerLibrary, llm, logger })
 
 // 拍一拍回复语（poke-replies.txt，可自行增删）
 const pokeReplier = createPokeReplier(loadPokeReplies(config.rootDir, logger, config.pokeRepliesFile))
@@ -340,6 +343,7 @@ if (config.adminEnabled) {
     usageMeter,
     riskGuard,
     defenseGuard,
+    promptDebugger,
     // 控制台改了表情包文件后立即同步到内存里的库（bot 持有的是同一个数组引用）
     onStickersChanged: () => {
       try {

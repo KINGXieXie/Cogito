@@ -171,6 +171,7 @@ const PAGES = [
   ['commands','⌘  指令中心'],
   ['persona','✧  人格编辑'],
   ['style','✎  语言习惯'],
+  ['prompt','⌥  提示词调试'],
   ['stickers','▣  表情包库'],
   ['login','⇲  QQ 登录'],
   ['humanize','◉  回复行为'],
@@ -877,6 +878,74 @@ function bindStickers(){
   }
 }
 
+// ── 页面：提示词调试 ─────────────────────────────────────
+function promptSectionHtml(sec){
+  return '<details open style="margin:10px 0"><summary style="cursor:pointer;font-weight:600">' + esc(sec.name) + ' · ' + sec.chars + ' 字</summary>' +
+    '<pre style="white-space:pre-wrap;word-break:break-word;background:#f7f5ef;border-radius:8px;padding:10px;margin-top:8px;font-size:12px;line-height:1.6;max-height:360px;overflow:auto">' + esc(sec.text) + '</pre></details>'
+}
+function pagePrompt(){
+  const first = (state?.config?.whitelist || [])[0]
+  const defaultKey = first ? 'g' + first : ''
+  return `<div class="section-head"><h2>提示词调试</h2><span class="note">看这句话最终会拼出什么提示词；试跑只调用模型，不发送 QQ 消息</span></div>
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <label>会话</label><input id="promptChatKey" type="text" value="${esc(defaultKey)}" placeholder="g群号 或 pQQ号" style="width:180px">
+      <button class="btn primary" id="promptPreview">预览提示词</button>
+      <button class="btn" id="promptTry">试跑回复（会产生费用）</button>
+      <button class="btn" id="promptCopy">复制整个提示词</button>
+    </div>
+    <textarea id="promptText" placeholder="输入一句群友可能说的话，例如：今天太累了，不想写作业" style="width:100%;min-height:84px;padding:10px;border-radius:8px;border:1px solid #ddd;font-size:14px;box-sizing:border-box"></textarea>
+    <div class="mut" style="font-size:12px;margin-top:8px">提示：人格在「人格编辑」页改，语言习惯在「语言习惯」页改；这里只负责看拼装结果。</div>
+  </div>
+  <div id="promptMeta" class="note" style="margin-bottom:8px"></div>
+  <div id="promptReply" class="card" style="margin-bottom:12px;display:none"></div>
+  <div id="promptSections"></div>`
+}
+function bindPrompt(){
+  const preview = document.getElementById('promptPreview')
+  const tryBtn = document.getElementById('promptTry')
+  const copyBtn = document.getElementById('promptCopy')
+  const box = document.getElementById('promptSections')
+  const meta = document.getElementById('promptMeta')
+  const replyBox = document.getElementById('promptReply')
+  const readInputs = () => ({
+    chatKey: (document.getElementById('promptChatKey')?.value || '').trim(),
+    text: (document.getElementById('promptText')?.value || '').trim(),
+  })
+  let lastPrompt = ''
+  const render = (r) => {
+    lastPrompt = r.prompt || ''
+    if (meta) meta.textContent = '总长 ' + r.chars + ' 字 · 约 ' + r.approxTokens + ' tokens · 计划 ' + (r.plan?.lines || 1) + ' 行 / 预算 ' + (r.plan?.budget || 0) + ' 字 · 旧事检索命中 ' + (r.recallCount || 0) + ' 条'
+    if (box) box.innerHTML = (r.sections || []).map(promptSectionHtml).join('')
+  }
+  if (preview) preview.onclick = async () => {
+    const { chatKey, text } = readInputs()
+    if (!text) return toast('先输入一句话', true)
+    preview.disabled = true
+    try { render(await api('/api/action/prompt-preview', { chatKey, text })) }
+    catch (e) { toast('预览失败：' + e.message, true) } finally { preview.disabled = false }
+  }
+  if (tryBtn) tryBtn.onclick = async () => {
+    const { chatKey, text } = readInputs()
+    if (!text) return toast('先输入一句话', true)
+    tryBtn.disabled = true
+    try {
+      const r = await api('/api/action/prompt-try', { chatKey, text })
+      render(r)
+      if (replyBox) {
+        replyBox.style.display = 'block'
+        replyBox.innerHTML = '<h3>试跑结果（未发送）</h3><div class="mut" style="font-size:12px">耗时 ' + r.elapsedMs + 'ms · 分条 ' + (r.shaped?.length || 0) + ' 条</div>' +
+          '<div style="margin-top:8px"><b>原始：</b><pre style="white-space:pre-wrap;font-size:13px">' + esc(r.raw || '') + '</pre></div>' +
+          '<div style="margin-top:8px"><b>裁剪后：</b><pre style="white-space:pre-wrap;font-size:13px">' + esc((r.shaped || []).join('\n---\n')) + '</pre></div>'
+      }
+    } catch (e) { toast('试跑失败：' + e.message, true) } finally { tryBtn.disabled = false }
+  }
+  if (copyBtn) copyBtn.onclick = async () => {
+    if (!lastPrompt) return toast('先预览一次', true)
+    try { await navigator.clipboard.writeText(lastPrompt); toast('已复制提示词') } catch { toast('复制失败，可以手动选中', true) }
+  }
+}
+
 function render(){
   const main = document.getElementById('main')
   let html = ''
@@ -886,6 +955,7 @@ function render(){
   else if (page === 'persona') html = pagePersona()
   else if (page === 'style') html = pageStyle()
   else if (page === 'login') html = pageLogin()
+  else if (page === 'prompt') html = pagePrompt()
   else if (page === 'stickers') html = pageStickers()
   else if (page === 'humanize') html = pageHumanize()
   else if (page === 'api') html = pageApi()
@@ -895,6 +965,7 @@ function render(){
   else html = pageData()
   main.innerHTML = html
   bind().catch(e => toast('界面初始化失败：' + e.message, true))
+  if (page === 'prompt') bindPrompt()
   if (page === 'stickers') { bindStickers(); loadStickersPage() }
   if (page === 'logs') refreshLogs()
   if (page === 'report' || page === 'data') loadDaily()
