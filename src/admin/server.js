@@ -10,6 +10,7 @@ import { applyConversationSettings, resetConversationMemory } from '../conversat
 import { writeTextAtomic } from '../stateFile.js'
 import { normalizeSpeechHabits, speechHabitsFile, SPEECH_HABITS_MAX } from '../speechHabits.js'
 import { readLatestSummaryAlert } from '../summaryAlerts.js'
+import { loadDefenseWords, saveDefenseWords, DEFAULT_INSULTS, DEFAULT_ALIASES } from '../defenseWords.js'
 import { listStickers, saveSticker, updateSticker, deleteSticker } from '../stickerLibrary.js'
 import { stickerDir } from '../stickers.js'
 import { loginSnapshot, napcatCall, findWebuiConfig, readWebuiSettings, findQrImage } from '../napcatLogin.js'
@@ -949,6 +950,20 @@ export function createAdminServer({ config, logger, onebot, memory, chatSettings
       const n = targetWatch.pendingCount?.() ?? 0
       await targetWatch.tick()
       return { ok: true, pendingBefore: n }
+    },
+    async 'defense-words-get'() {
+      const words = defenseGuard?.words?.() ?? loadDefenseWords(config.dataDir, { logger })
+      return { ok: true, insults: words.insults, aliases: words.aliases, defaults: { insults: DEFAULT_INSULTS, aliases: DEFAULT_ALIASES }, enabled: config.defenseEnabled, muteSeconds: config.defenseMuteSeconds }
+    },
+    async 'defense-words-save'({ insults, aliases } = {}) {
+      const saved = saveDefenseWords(config.dataDir, { insults, aliases })
+      defenseGuard?.setWords?.(saved)
+      return { ok: true, ...saved }
+    },
+    async 'defense-words-reset'() {
+      const saved = saveDefenseWords(config.dataDir, { insults: DEFAULT_INSULTS, aliases: DEFAULT_ALIASES })
+      defenseGuard?.setWords?.(saved)
+      return { ok: true, ...saved }
     },
     async 'prompt-preview'({ chatKey = '', text = '' } = {}) {
       if (!promptDebugger) throw Error('提示词调试未初始化')

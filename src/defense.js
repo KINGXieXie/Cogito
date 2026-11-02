@@ -9,17 +9,17 @@
  * - 计数按"窗口"衰减（默认 7 天），改了就是改了；
  * - 每一次动作都写 data/defense-log.jsonl，方便回查。
  */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, appendFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, appendFileSync } from 'node:fs'
 import path from 'node:path'
 import { writeJsonAtomic } from './stateFile.js'
+import { compileInsultRegex, normalizeWords, DEFAULT_INSULTS, DEFAULT_ALIASES } from './defenseWords.js'
 
-export const DEFAULT_DEFENSE_ALIASES = ['叫我蟹蟹就好', '蟹蟹', '主人', '老登']
+export const DEFAULT_DEFENSE_ALIASES = DEFAULT_ALIASES
 
-// 明确的人身攻击词：宁可漏判，也不要把玩笑打成辱骂
-const INSULT_RE = /傻[逼b比屌]|傻缺|脑残|智障|弱智|白痴|蠢货|蠢猪|废物|垃圾东西|狗东西|狗杂种|贱人|贱种|畜生|去死|滚蛋|滚出去|你妈(死|没)|尼玛|妈的死|操你|日你|全家(死|没)|吃屎|死全家|sb|s b|nmsl/i
-
-export function hasInsult(text) {
-  return INSULT_RE.test(String(text ?? ''))
+/** 默认词库的纯函数版（测试/兼容用） */
+export function hasInsult(text, insults = DEFAULT_INSULTS) {
+  const re = compileInsultRegex(insults)
+  return re ? re.test(String(text ?? '')) : false
 }
 
 function atOwner(evt, ownerId) {
@@ -55,13 +55,17 @@ export function pickDefenseLine(strikes = 1, rand = Math.random) {
   return list[Math.min(list.length - 1, Math.floor(rand() * list.length))]
 }
 
-export function createDefenseGuard({ dataDir, config = {}, logger, now = Date.now } = {}) {
+export function createDefenseGuard({ dataDir, config = {}, words = null, logger, now = Date.now } = {}) {
   const enabled = config.defenseEnabled !== false
   const muteSeconds = Math.max(10, Math.min(3600, config.defenseMuteSeconds || 120))
   const windowMs = Math.max(60_000, config.defenseWindowMs || 7 * 86400000)
   const whitelist = new Set((config.defenseWhitelist || []).map(String))
   const stateFile = dataDir ? path.join(String(dataDir), 'defense-state.json') : null
   const logFile = dataDir ? path.join(String(dataDir), 'defense-log.jsonl') : null
+  // 词库：可被控制台热更新（setWords），不用重启
+  let insults = normalizeWords(words?.insults?.length ? words.insults : DEFAULT_INSULTS, { label: '辱骂词' })
+  let aliases = normalizeWords(words?.aliases?.length ? words.aliases : DEFAULT_ALIASES, { label: '指向词' })
+  let insultRe = compileInsultRegex(insults)
   let state = { version: 1, members: {} }
   const recent = []
 
@@ -113,6 +117,21 @@ export function createDefenseGuard({ dataDir, config = {}, logger, now = Date.no
     save()
   }
 
+  /** 控制台保存词库后热更新：立即影响后续判定 */
+  function setWords({ insults: nextInsults, aliases: nextAliases } = {}) {
+    if (Array.isArray(nextInsults) && nextInsults.length) {
+      insults = normalizeWords(nextInsults, { label: '辱骂词' })
+      insultRe = compileInsultRegex(insults)
+    }
+    if (Array.isArray(nextAliases)) aliases = normalizeWords(nextAliases, { label: '指向词' })
+    logger?.info?.(`[守护] 词库已更新：辱骂词 ${insults.length} 个、指向词 ${aliases.length} 个`)
+    return wordsView()
+  }
+
+  function wordsView() {
+    return { insults: insults.slice(), aliases: aliases.slice(), hasInsult: (text) => (insultRe ? insultRe.test(String(text ?? '')) : false) }
+  }
+
   function stateView() {
     const members = Object.entries(state.members).map(([key, v]) => {
       const [groupId, userId] = key.split(':')
@@ -121,5 +140,5 @@ export function createDefenseGuard({ dataDir, config = {}, logger, now = Date.no
     return { enabled, muteSeconds, windowMs, members, recent: recent.slice(-10) }
   }
 
-  return { enabled, evaluate, reset, state: stateView, muteSeconds, windowMs }
+  return { enabled, evaluate, reset, state: stateView, muteSeconds, windowMs, setWords, words: wordsView, aliases: () => aliases.slice(), hasInsult: (text) => (insultRe ? insultRe.test(String(text ?? '')) : false) }
 }

@@ -27,6 +27,7 @@ const scripts = [
   'test-risk-guard.mjs',
   'test-name-guard.mjs',
   'test-defense.mjs',
+  'test-defense-words.mjs',
   'test-prompt-debug.mjs',
   'test-persona-memory.mjs',
   'test-long-memory-budget.mjs',

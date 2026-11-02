@@ -21,7 +21,7 @@ import { selectHistory } from './contextSelect.js'
 import { shouldRecall, buildRecallNote } from './contextRecall.js'
 import { extractSticker, stickerHint, stickerCq, matchEmotionTag, findStickerByTag } from './stickers.js'
 import { guardExclusiveNickname } from './nameGuard.js'
-import { targetsOwner, hasInsult, pickDefenseLine } from './defense.js'
+import { targetsOwner, pickDefenseLine } from './defense.js'
 import {
   checkMembers,
   buildReminderMessages,
@@ -361,8 +361,8 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
     if (!ownerId) return false
     if (String(evt.user_id) === ownerId) return false
     const name = evt.sender?.card || evt.sender?.nickname || String(evt.user_id)
-    if (!targetsOwner(evt, parsed, { ownerId, aliases: config.defenseAliases })) return false
-    if (!hasInsult(parsed.text)) return false
+    if (!targetsOwner(evt, parsed, { ownerId, aliases: defense.aliases() })) return false
+    if (!defense.hasInsult(parsed.text)) return false
 
     // 模型二次确认：只输出一个"是/否"，避免把玩笑、反串、引用误判成辱骂
     if (config.defenseLlmConfirm) {

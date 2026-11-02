@@ -172,6 +172,7 @@ const PAGES = [
   ['persona','✧  人格编辑'],
   ['style','✎  语言习惯'],
   ['prompt','⌥  提示词调试'],
+  ['defense','🛡  守护词库'],
   ['stickers','▣  表情包库'],
   ['login','⇲  QQ 登录'],
   ['humanize','◉  回复行为'],
@@ -946,6 +947,67 @@ function bindPrompt(){
   }
 }
 
+// ── 页面：守护词库 ─────────────────────────────────────
+function pageDefense(){
+  const df = state?.defense || {}
+  return `<div class="section-head"><h2>守护词库</h2><span class="note">自己增删触发"维护你"机制的词；保存后立即生效，不用重启</span></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="note">状态：${df.enabled ? '已启用' : '未启用'} · 再犯禁言 ${df.muteSeconds || 0} 秒 · 计数窗口 ${Math.round((df.windowMs || 0) / 86400000)} 天</div>
+    <div class="mut" style="font-size:12px;margin-top:6px">判定要同时满足：① 消息指向你（@你 / 出现"指向词"）；② 内容命中下面的"辱骂词"；③ 模型再确认一次。</div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <h3>辱骂词（每行一个）</h3>
+    <div class="note">命中这些词才会进入判断；宁可少写，也别把"笨蛋""菜"这类玩笑词放进来。</div>
+    <textarea id="defenseInsults" style="width:100%;min-height:180px;margin-top:10px;padding:10px;border-radius:8px;border:1px solid #ddd;font-size:13px;box-sizing:border-box"></textarea>
+    <h3 style="margin-top:16px">指向词（每行一个）</h3>
+    <div class="note">别人用什么称呼指代你：@你 也会算；这里写"叫我蟹蟹就好 / 蟹蟹 / 老登"等。</div>
+    <textarea id="defenseAliases" style="width:100%;min-height:110px;margin-top:10px;padding:10px;border-radius:8px;border:1px solid #ddd;font-size:13px;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn primary" id="defenseSave">保存词库</button>
+      <button class="btn" id="defenseReload">重新读取</button>
+      <button class="btn danger" id="defenseResetWords">恢复默认</button>
+      <span class="mut" id="defenseHint"></span>
+    </div>
+  </div>`
+}
+async function loadDefenseWordsUI(){
+  try {
+    const r = await api('/api/action/defense-words-get', {})
+    const ins = document.getElementById('defenseInsults')
+    const ali = document.getElementById('defenseAliases')
+    if (ins) ins.value = (r.insults || []).join('\n')
+    if (ali) ali.value = (r.aliases || []).join('\n')
+  } catch (e) { toast('读取词库失败：' + e.message, true) }
+}
+function bindDefense(){
+  const ins = document.getElementById('defenseInsults')
+  const ali = document.getElementById('defenseAliases')
+  const hint = document.getElementById('defenseHint')
+  const split = (el) => (el?.value || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+  const saveBtn = document.getElementById('defenseSave')
+  if (saveBtn) saveBtn.onclick = async () => {
+    saveBtn.disabled = true
+    try {
+      const r = await api('/api/action/defense-words-save', { insults: split(ins), aliases: split(ali) })
+      if (hint) hint.textContent = '已保存：辱骂词 ' + r.insults.length + ' 个 / 指向词 ' + r.aliases.length + ' 个'
+      toast('词库已保存并生效')
+    } catch (e) { toast('保存失败：' + e.message, true) } finally { saveBtn.disabled = false }
+  }
+  const reloadBtn = document.getElementById('defenseReload')
+  if (reloadBtn) reloadBtn.onclick = () => loadDefenseWordsUI()
+  const resetBtn = document.getElementById('defenseResetWords')
+  if (resetBtn) resetBtn.onclick = async () => {
+    if (!confirm('恢复默认词库？你手动增删的词会被覆盖。')) return
+    try {
+      const r = await api('/api/action/defense-words-reset', {})
+      if (ins) ins.value = (r.insults || []).join('\n')
+      if (ali) ali.value = (r.aliases || []).join('\n')
+      toast('已恢复默认词库')
+    } catch (e) { toast('恢复失败：' + e.message, true) }
+  }
+  loadDefenseWordsUI()
+}
+
 function render(){
   const main = document.getElementById('main')
   let html = ''
@@ -955,6 +1017,7 @@ function render(){
   else if (page === 'persona') html = pagePersona()
   else if (page === 'style') html = pageStyle()
   else if (page === 'login') html = pageLogin()
+  else if (page === 'defense') html = pageDefense()
   else if (page === 'prompt') html = pagePrompt()
   else if (page === 'stickers') html = pageStickers()
   else if (page === 'humanize') html = pageHumanize()
@@ -965,6 +1028,7 @@ function render(){
   else html = pageData()
   main.innerHTML = html
   bind().catch(e => toast('界面初始化失败：' + e.message, true))
+  if (page === 'defense') bindDefense()
   if (page === 'prompt') bindPrompt()
   if (page === 'stickers') { bindStickers(); loadStickersPage() }
   if (page === 'logs') refreshLogs()
