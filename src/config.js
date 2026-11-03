@@ -366,6 +366,8 @@ export function loadConfig() {
     contextRememberAll: String(env.CONTEXT_REMEMBER_ALL ?? '1').toLowerCase() !== '0' && String(env.CONTEXT_REMEMBER_ALL ?? '1').toLowerCase() !== 'false',
     // 长期记忆：被挤出近期窗口的旧消息压缩成摘要（可持续累积，记住远超窗口的内容）
     longMemoryEnabled: String(env.LONG_MEMORY_ENABLED ?? '1').toLowerCase() !== '0' && String(env.LONG_MEMORY_ENABLED ?? '1').toLowerCase() !== 'false',
+    // 群聊里小于这么多字（按去空白计）的消息不注入长期记忆；0=不跳过
+    memorySkipBelowChars: Math.max(0, Math.floor(num('MEMORY_SKIP_BELOW_CHARS', 8))),
     longMemoryMaxChars: Math.max(300, Math.min(6000, Math.floor(num('LONG_MEMORY_MAX_CHARS', 1500)))),
     longMemoryIntervalMs: Math.max(60000, Math.floor(num('LONG_MEMORY_INTERVAL_MS', 600000))),
     // 攒够多少条旧消息才整理一次：调大能减少"每次重写整段摘要"的调用次数

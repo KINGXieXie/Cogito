@@ -42,7 +42,11 @@ export function inspectSummaryQuality(text, { records = [], stats = {}, contentP
   if (!contentProfile.forwardOnly && counts.topics > topicPolicy.max) issues.push(`热门话题有 ${counts.topics} 项，本期最多 ${topicPolicy.max} 项；请合并重复事件并保留重点`)
   if (contentProfile.forwardOnly && counts.topics > 0) issues.push('没有有效群内交流，不能把转发资料单独写成热门话题')
   if (contentProfile.forwardOnly && counts.quotes > 0) issues.push('只有转发资料，内层原话不能当作本群群圣经')
-  if (counts.members < min.members) issues.push(`群友称号只有 ${counts.members} 项，应至少 ${min.members} 项`)
+  // 只差 1 项时放行（实测 11-2 因写了 3 项、要求 4 项而整份报告作废）：
+  // 排版/话题/圣经都合格的前提下，宁可少一个称号，也别让群友当天看不到报告。
+  if (counts.members < min.members && counts.members < Math.max(1, min.members - 1)) {
+    issues.push(`群友称号只有 ${counts.members} 项，应至少 ${min.members} 项`)
+  }
   if (counts.members > 5) issues.push(`群友称号有 ${counts.members} 项，最多保留 5 项`)
   if (counts.quotes < min.quotes) issues.push(`群圣经只有 ${counts.quotes} 项，应至少 ${min.quotes} 项`)
   if (contentProfile.forwardCount) {

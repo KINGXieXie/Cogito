@@ -31,6 +31,7 @@ const scripts = [
   'test-defense.mjs',
   'test-defense-words.mjs',
   'test-prompt-debug.mjs',
+  'test-memory-inject.mjs',
   'test-persona-memory.mjs',
   'test-long-memory-budget.mjs',
   'test-private-profiles.mjs',
