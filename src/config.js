@@ -325,6 +325,13 @@ export function loadConfig() {
     defenseLlmConfirm: String(env.DEFENSE_LLM_CONFIRM ?? '1').toLowerCase() !== '0' && String(env.DEFENSE_LLM_CONFIRM ?? '1').toLowerCase() !== 'false',
     humanDelayMinMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MIN_MS', 600))),
     humanDelayMaxMs: Math.max(0, Math.floor(num('HUMAN_DELAY_MAX_MS', 2500))),
+    // 按字数估算打字时间（毫秒/字）；多行回复按每行字数等，避免 1 秒内连发好几条
+    typingPerCharMs: Math.max(0, Math.floor(num('TYPING_PER_CHAR_MS', 55))),
+    typingMaxMs: Math.max(1000, Math.floor(num('TYPING_MAX_MS', 7000))),
+    // 书籍/文学话题主动接话
+    bookJoinEnabled: String(env.BOOK_JOIN_ENABLED ?? '1').toLowerCase() !== '0' && String(env.BOOK_JOIN_ENABLED ?? '1').toLowerCase() !== 'false',
+    bookJoinRate: Math.min(1, Math.max(0, num('BOOK_JOIN_RATE', 0.45))),
+    bookJoinCooldownMs: Math.max(60_000, Math.floor(num('BOOK_JOIN_COOLDOWN_MS', 15 * 60_000))),
     // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等
     thinkDelayMinMs: Math.max(0, Math.floor(num('THINK_DELAY_MIN_MS', 800))),
     thinkDelayMaxMs: Math.max(0, Math.floor(num('THINK_DELAY_MAX_MS', 2200))),

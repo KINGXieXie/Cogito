@@ -112,6 +112,21 @@ export function typingDelay({ min = 600, max = 2500 } = {}) {
 }
 
 /**
+ * 按"要打多少字"估算打字延迟：字越多，等得越久（像真人在敲键盘）。
+ * 用来避免多行回复在 1 秒内连续蹦出来。返回毫秒（测试用），不做 sleep。
+ */
+export function typingDelayMsForLength(length, { min = 600, max = 6000, perCharMs = 55 } = {}, rand = Math.random) {
+  const chars = Math.max(0, Number(length) || 0)
+  const target = Math.max(min, Math.min(max, Math.round(chars * perCharMs)))
+  const jitter = Math.min(600, Math.max(0, max - target) * 0.35)
+  return Math.round(Math.min(max, target + rand() * jitter))
+}
+
+export function typingDelayForLength(length, options = {}, rand = Math.random) {
+  return sleep(typingDelayMsForLength(length, options, rand))
+}
+
+/**
  * 被@/私聊时的"先想一想"停顿：对方问得越长，停顿越像在想。
  * 只用于直接对话；群里自己水两句不加这段，否则像在装深沉。
  */

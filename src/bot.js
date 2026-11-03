@@ -15,12 +15,13 @@ import { resetConversationMemory, prepareSessionPersona, sessionPersona, sameSes
 import { expandForwardRecords } from './forwardRecords.js'
 import { createQuotedMessageResolver } from './quotedMessage.js'
 import { renderFacesToCq } from './qqFace.js'
-import { limitDecorationLines, hasDecoration, typingDelay, thinkDelayMs, isQuietHour } from './humanize.js'
+import { limitDecorationLines, hasDecoration, typingDelay, typingDelayForLength, thinkDelayMs, isQuietHour } from './humanize.js'
 import { measureText, backlogLength, planReply, shapeReply, shapeHint, decorationHint, ensureDecoration, pickDecorationKind, asksForAnalysis, asksForQuestion } from './replyShape.js'
 import { selectHistory } from './contextSelect.js'
 import { shouldRecall, buildRecallNote } from './contextRecall.js'
 import { extractSticker, stickerHint, stickerCq, matchEmotionTag, findStickerByTag } from './stickers.js'
 import { createTopicTracker } from './stickerTopics.js'
+import { isBookTopic } from './bookTopics.js'
 import { createStickerScheduler } from './stickerScheduler.js'
 import { guardExclusiveNickname } from './nameGuard.js'
 import { targetsOwner, pickDefenseLine } from './defense.js'
@@ -324,6 +325,7 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
     logger,
   })
   const lastProactive = new Map() // 白名单群主动搭话冷却：groupId -> 上次时间戳
+  const lastBookJoin = new Map() // 书籍/文学话题主动接话冷却：groupId -> 上次时间戳
   const lastPoke = new Map() // 拍一拍回应冷却：会话 key -> 上次时间戳
   // 最近一次 /id_check 的结果：groupId -> { group_id, at, bad, kicked }
   // 只活在内存里（5 分钟有效期）：机器人一重启就作废，踢人指令会静默失效 —— 这是安全方向
@@ -443,7 +445,11 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
           logger.info(`[限流] 后续 ${lines.length - i} 行未发送（${gate.reason}）`)
           break
         }
-        await typingDelay({ min: config.lineGapMinMs, max: config.lineGapMaxMs })
+        await typingDelayForLength(measureText(lines[i]), {
+          min: config.lineGapMinMs,
+          max: Math.max(config.lineGapMaxMs, config.typingMaxMs),
+          perCharMs: Math.max(0, Math.round((config.typingPerCharMs || 0) / 2)),
+        }, rand)
       }
       if (!canSend() || !replyStillCurrent(onebot, evt, { latestOnly: evt.message_type !== 'private' && !directReply })) break
       const cleanLine = stripInternalReplyMetadata(lines[i])
@@ -1008,7 +1014,24 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
       const senderName = evt.sender?.card || evt.sender?.nickname || String(evt.user_id)
       const key = isPrivate ? `p${evt.user_id}` : `g${groupId}`
 
-      const decision = decideReply({ isPrivate, atBot: parsed.atBot, replyToBot, groupId, config, lastProactive, chatSettings, chatKey: key })
+      let decision = decideReply({ isPrivate, atBot: parsed.atBot, replyToBot, groupId, config, lastProactive, chatSettings, chatKey: key })
+
+      // 书籍/文学话题：没被@也可能主动接一句（有冷却和概率，只限白名单群）
+      // 注意：只在"单纯没触发回复"时接管；静音群、安静时段、会话关闭一律不越权。
+      let bookJoin = false
+      const bookQuiet = isQuietHour(config.quietHours, new Date())
+      const bookMuted = Boolean(config.mutedGroups?.has?.(Number(groupId)))
+      const sessionOff = chatSettings?.get?.(key)?.enabled === false
+      if (!isPrivate && config.bookJoinEnabled && !directReply && decision.reply === false &&
+        !bookQuiet && !bookMuted && !sessionOff &&
+        config.whitelistGroups.has(Number(groupId)) && isBookTopic(parsed.text)) {
+        const last = lastBookJoin.get(Number(groupId)) || 0
+        if (Date.now() - last >= config.bookJoinCooldownMs && rand() < config.bookJoinRate) {
+          bookJoin = true
+          lastBookJoin.set(Number(groupId), Date.now())
+          decision = { reply: true, reason: '书籍/文学话题主动接话' }
+        }
+      }
 
       // 本会话生效值：会话设置优先，其次全局（在控制台改了立刻生效，无需重启）
       const eff = chatSettings ? chatSettings.resolve(key, config) : null
@@ -1173,7 +1196,8 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         imageNote +
         shapeHint(plan) +
         decorationHint(allowDecoration, decoKind, decorationPreset) +
-        (config.stickerEnabled ? stickerHint(stickers) : '')
+        (config.stickerEnabled ? stickerHint(stickers) : '') +
+        (bookJoin ? '\n\n【本条是书籍/文学话题（你可以自然接一句）】群友在聊书、作家、诗或小说：说一两句你记得的细节或自己的感受就好，别列书单、别科普、别抢话。语气照旧，一条一条慢慢说。' : '')
       // 旧事检索：只在消息里出现"上次/记得/之前"这类回忆词时才去翻记录，平时不花 token
       if (config.recallEnabled && groupId && typeof recall === 'function' && shouldRecall(parsed.text)) {
         try {
@@ -1342,7 +1366,11 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
           }
         }
         // 拟人延迟后再检查一次，避免第一条的慢回复打断刚触发的 +1。
-        await typingDelay({ min: config.humanDelayMinMs, max: config.humanDelayMaxMs })
+        await typingDelayForLength(measureText(finalLines.join('')), {
+          min: config.humanDelayMinMs,
+          max: config.typingMaxMs,
+          perCharMs: config.typingPerCharMs,
+        }, rand)
         if (!canContinue()) return
         // 本条用户消息若未记入（未被追踪的群），这里补记，保证答案不悬空
         // 多行时逐行分条发送（像人说完一句再补一句）
