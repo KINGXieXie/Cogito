@@ -29,6 +29,7 @@ assert.ok(a.approxTokens > 0)
 assert.ok(a.sections.some((s) => s.text.includes('思思')), '应包含人格')
 assert.ok(a.sections.some((s) => s.text.includes('回复的形态要求') || s.text.includes('形态要求')), '应包含形态要求')
 assert.ok(a.sections.some((s) => s.text.includes('表情包')), '应包含表情包说明')
+assert.ok(a.sections.some((s) => s.text.includes('[at:对方]')), '应包含 @ 人说明')
 assert.equal(a.recallCount, 0)
 assert.equal(recallCalls, 0, '不出现回忆词时不应检索')
 

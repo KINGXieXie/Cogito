@@ -33,6 +33,9 @@ export function createPromptDebugger({ config, longMemory, todayNote = () => '',
     const shape = shapeHint(plan)
     const deco = decorationHint(false)
     const sticker = config.stickerEnabled ? stickerHint(stickers) : ''
+    const atHint = config.atEnabled && String(chatKey).startsWith('g')
+      ? '\n\n【@ 人（可选）】群里想具体叫某个人时，可以在回复开头写 [at:对方]（指刚才说话的人）或 [at:名字]；系统会换成真 @。别滥用、别 @ 全体，@ 了就要真的在跟对方说话。'
+      : ''
     let recallNote = ''
     let recallFound = []
     try {
@@ -49,6 +52,7 @@ export function createPromptDebugger({ config, longMemory, todayNote = () => '',
       { name: '本次形态要求（行数/字数）', text: shape },
       { name: '装饰符号说明', text: deco },
       { name: '表情包说明', text: sticker },
+      { name: '@ 人说明', text: atHint },
       { name: '旧事检索注入', text: recallNote },
     ].filter((s) => s.text)
     const prompt = sections.map((s) => s.text).join('')
