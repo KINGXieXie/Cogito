@@ -36,6 +36,7 @@ const scripts = [
   'test-typing-pace.mjs',
   'test-book-join.mjs',
   'test-mentions.mjs',
+  'test-dopey-joke.mjs',
   'test-persona-memory.mjs',
   'test-long-memory-budget.mjs',
   'test-private-profiles.mjs',
