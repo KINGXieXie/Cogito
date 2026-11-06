@@ -19,7 +19,7 @@ const directPlan = planReply({
 assert.equal(directPlan.direct, true)
 assert.ok(directPlan.lines >= 2, `直接对话至少两句，当前 ${directPlan.lines}`)
 assert.ok(directPlan.lines <= 3, `不要变成小作文，当前 ${directPlan.lines}`)
-assert.ok(directPlan.budget >= 70, `直接对话预算应 ≥70，当前 ${directPlan.budget}`)
+assert.ok(directPlan.budget >= 50, `直接对话预算应 ≥50，当前 ${directPlan.budget}`)
 assert.ok(directPlan.budget <= directPlan.lines * 40, '仍受单行上限约束')
 
 // 2) 两个字的招呼不硬凑：还是普通短回复

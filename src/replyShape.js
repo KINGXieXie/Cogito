@@ -145,27 +145,27 @@ export function planReply({
   // 给 2 行（问得长时 3 行）和一点额外预算，输出仍然按聊天尺度收着，不写成长段落。
   if (analysis && maxLines > 1) {
     const lines = Math.min(maxLines, target >= lineMaxChars * 1.2 ? 3 : 2)
-    const budget = Math.max(36, Math.min(lines * lineMaxChars, Math.round(target * 0.7) + 42))
-    const perLineCap = Math.max(10, Math.min(lineMaxChars, Math.round(budget / lines) + 8))
+    const budget = Math.max(36, Math.min(lines * lineMaxChars, Math.round(target * 0.65) + 34))
+    const perLineCap = Math.max(10, Math.min(lineMaxChars, Math.round(budget / lines) + 6))
     return { targetLen: target, lines, budget, perLineCap, lineMaxChars, analysis: true }
   }
   // 被 @ / 引用 / 私聊的直接对话：给对方"想了一下、答完整"的回复——2~3 句而不是一句打发。
   // 两个字以内的招呼（"在？"）不硬凑，仍按普通短回复走。
   if (direct && maxLines > 1 && (question || target >= 6)) {
-    const lines = Math.min(maxLines, Math.max(2, Math.min(3, Math.ceil((target + 30) / 35))))
-    const budget = Math.max(70, Math.min(lines * lineMaxChars, Math.round(target * 1.3) + 70))
-    const perLineCap = Math.max(12, Math.min(lineMaxChars, Math.round(budget / lines) + 10))
+    const lines = Math.min(maxLines, Math.max(2, Math.min(3, Math.ceil((target + 24) / 40))))
+    const budget = Math.max(48, Math.min(lines * lineMaxChars, Math.round(target * 1.0) + 45))
+    const perLineCap = Math.max(12, Math.min(lineMaxChars, Math.round(budget / lines) + 8))
     return { targetLen: target, lines, budget, perLineCap, lineMaxChars, direct: true, ...(question ? { question: true } : {}) }
   }
   const lines = matchEnabled ? pickLineCount(target, { maxLines, lineMaxChars, rand }) : 1
   // 预算：跟着对方长度走，再留一点余量让回复能带出具体细节/自己的反应。
   // 极短输入（"在吗""嗯"）少给余量——真人这时候往往只回一两个字，不该永远比对方说得多。
-  const surplus = target <= 8 ? 6 : 12
-  let budget = Math.max(4, Math.min(lines * lineMaxChars, Math.round(target * 1.15) + surplus))
+  const surplus = target <= 8 ? 4 : 8
+  let budget = Math.max(4, Math.min(lines * lineMaxChars, Math.round(target * 1.08) + surplus))
   // 问句是例外：对方只打了几个字，但答案往往要一两句（"今天有什么新闻""哪家店好吃"）。
   // 按字数硬卡会把答案腰斩成"……"，看起来断断续续；这里把问句的地板抬到一行能写完。
-  if (question) budget = Math.max(budget, Math.min(lines * lineMaxChars, Math.min(lineMaxChars, 40)))
-  const perLineCap = Math.max(4, Math.min(lineMaxChars, Math.ceil(budget / lines) + 6))
+  if (question) budget = Math.max(budget, Math.min(lines * lineMaxChars, Math.min(lineMaxChars, 32)))
+  const perLineCap = Math.max(4, Math.min(lineMaxChars, Math.ceil(budget / lines) + 4))
   return { targetLen: target, lines, budget, perLineCap, lineMaxChars, ...(question ? { question: true } : {}) }
 }
 
