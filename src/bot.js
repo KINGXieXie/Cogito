@@ -466,8 +466,8 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         }
         await typingDelayForLength(measureText(lines[i]), {
           min: config.lineGapMinMs,
-          max: Math.max(config.lineGapMaxMs, config.typingMaxMs),
-          perCharMs: Math.max(0, Math.round((config.typingPerCharMs || 0) / 2)),
+          max: Math.min(config.typingMaxMs, Math.max(config.lineGapMaxMs, config.typingMaxMs)),
+          perCharMs: Math.max(0, config.typingPerCharMs || 0),
         }, rand)
       }
       if (!canSend() || !replyStillCurrent(onebot, evt, { latestOnly: evt.message_type !== 'private' && !directReply })) break
