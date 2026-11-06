@@ -12,6 +12,7 @@ import {
 } from './replyShape.js'
 import { stickerHint } from './stickers.js'
 import { shouldRecall, buildRecallNote } from './contextRecall.js'
+import { isBookTopic } from './bookTopics.js'
 
 export function createPromptDebugger({ config, longMemory, todayNote = () => '', recall = null, stickers = [], llm = null, logger }) {
   const buildPrompt = createChatPromptBuilder({ config, longMemory, todayNote })
@@ -33,6 +34,9 @@ export function createPromptDebugger({ config, longMemory, todayNote = () => '',
     const shape = shapeHint(plan)
     const deco = decorationHint(false)
     const sticker = config.stickerEnabled ? stickerHint(stickers) : ''
+    const bookHint = !String(chatKey).startsWith('p') && isBookTopic(text)
+      ? '\n\n【本条是书籍/文学话题】群友在聊书、作家、诗或小说：可以自然地提一句你记得的细节或感受（像随口聊起），别列书单、别科普、别抢话。语气照旧，一条一条慢慢说。'
+      : ''
     const atHint = config.atEnabled && String(chatKey).startsWith('g')
       ? '\n\n【@ 人（可选）】群里想具体叫某个人时，可以在回复开头写 [at:对方]（指刚才说话的人）或 [at:名字]；系统会换成真 @。别滥用、别 @ 全体，@ 了就要真的在跟对方说话。'
       : ''
@@ -53,6 +57,7 @@ export function createPromptDebugger({ config, longMemory, todayNote = () => '',
       { name: '装饰符号说明', text: deco },
       { name: '表情包说明', text: sticker },
       { name: '@ 人说明', text: atHint },
+      { name: '书籍话题说明', text: bookHint },
       { name: '旧事检索注入', text: recallNote },
     ].filter((s) => s.text)
     const prompt = sections.map((s) => s.text).join('')

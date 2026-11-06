@@ -1041,9 +1041,10 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
       const bookQuiet = isQuietHour(config.quietHours, new Date())
       const bookMuted = Boolean(config.mutedGroups?.has?.(Number(groupId)))
       const sessionOff = chatSettings?.get?.(key)?.enabled === false
-      if (!isPrivate && config.bookJoinEnabled && !directReply && decision.reply === false &&
-        !bookQuiet && !bookMuted && !sessionOff &&
-        config.whitelistGroups.has(Number(groupId)) && isBookTopic(parsed.text)) {
+      // 话题判定独立于"要不要接话"：被@时也在提示词里带上书香，避免回答得很干
+      const bookTopic = !isPrivate && config.bookJoinEnabled && !bookQuiet && !bookMuted && !sessionOff && isBookTopic(parsed.text)
+      if (bookTopic && !directReply && decision.reply === false &&
+        config.whitelistGroups.has(Number(groupId))) {
         const last = lastBookJoin.get(Number(groupId)) || 0
         if (Date.now() - last >= config.bookJoinCooldownMs && rand() < config.bookJoinRate) {
           bookJoin = true
@@ -1217,7 +1218,7 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         decorationHint(allowDecoration, decoKind, decorationPreset) +
         (config.stickerEnabled ? stickerHint(stickers) : '') +
         (config.atEnabled && !isPrivate ? '\n\n【@ 人（可选）】群里想具体叫某个人时，可以在回复开头写 [at:对方]（指刚才说话的人）或 [at:名字]；系统会换成真 @。别滥用、别 @ 全体，@ 了就要真的在跟对方说话。' : '') +
-        (bookJoin ? '\n\n【本条是书籍/文学话题（你可以自然接一句）】群友在聊书、作家、诗或小说：说一两句你记得的细节或自己的感受就好，别列书单、别科普、别抢话。语气照旧，一条一条慢慢说。' : '')
+        (bookTopic ? '\n\n【本条是书籍/文学话题】群友在聊书、作家、诗或小说：可以自然地提一句你记得的细节或感受（像随口聊起），别列书单、别科普、别抢话。语气照旧，一条一条慢慢说。' : '')
       // 旧事检索：只在消息里出现"上次/记得/之前"这类回忆词时才去翻记录，平时不花 token
       if (config.recallEnabled && groupId && typeof recall === 'function' && shouldRecall(parsed.text)) {
         try {
