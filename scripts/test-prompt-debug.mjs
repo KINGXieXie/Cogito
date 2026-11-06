@@ -8,7 +8,7 @@ import { createPromptDebugger } from '../src/promptDebug.js'
 const config = {
   botName: '思思', persona: '你叫思思，一个说话很小声的女生。', speechHabits: '',
   replyMaxLines: 10, replyLineMaxChars: 40, replyLengthMatch: true, maxTokens: 500,
-  stickerEnabled: true, recallEnabled: true, recallMaxItems: 4,
+  stickerEnabled: true, atEnabled: true, recallEnabled: true, recallMaxItems: 4,
   exclusiveNickname: '老登', ownerUserId: '3308887513', ownerName: '蟹蟹',
 }
 const longMemory = { get: () => '' }
