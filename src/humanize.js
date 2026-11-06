@@ -54,6 +54,12 @@ export function hasDecoration(text) {
 /** 去掉所有装饰符号，并修整标点/空白 */
 export function stripDecoration(text) {
   let s = String(text ?? '')
+  // CQ 码（@、图片、QQ 表情）先占位保护：里面的 "=" 是语法，不是颜文字
+  const cq = []
+  s = s.replace(/\[CQ:[^\]]*\]/g, (m) => {
+    cq.push(m)
+    return `\u0001${cq.length - 1}\u0001`
+  })
   s = s.replace(FACE_MARK_RE, '')
   s = s.replace(KAOMOJI_PAREN, '')
   s = s.replace(KAOMOJI_BARE, '')
@@ -69,6 +75,8 @@ export function stripDecoration(text) {
     .replace(/\s+([，。！？～…、）)])/g, '$1')
     .replace(/^[\s，。！？～…、·]+/, '')
     .replace(/[\s，、·]+$/, '')
+  // 还原 CQ 码
+  s = s.replace(/\u0001(\d+)\u0001/g, (_, i) => cq[Number(i)] || '')
   return s.trim()
 }
 

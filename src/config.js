@@ -332,6 +332,10 @@ export function loadConfig() {
     bookJoinEnabled: String(env.BOOK_JOIN_ENABLED ?? '1').toLowerCase() !== '0' && String(env.BOOK_JOIN_ENABLED ?? '1').toLowerCase() !== 'false',
     bookJoinRate: Math.min(1, Math.max(0, num('BOOK_JOIN_RATE', 0.45))),
     bookJoinCooldownMs: Math.max(60_000, Math.floor(num('BOOK_JOIN_COOLDOWN_MS', 15 * 60_000))),
+    // @ 人：模型可写 [at:对方]/[at:名字]；回答问句时也可按概率自动 @ 提问者
+    atEnabled: String(env.AT_ENABLED ?? '1').toLowerCase() !== '0' && String(env.AT_ENABLED ?? '1').toLowerCase() !== 'false',
+    atAutoRate: Math.min(1, Math.max(0, num('AT_AUTO_RATE', 0.2))),
+    atCooldownMs: Math.max(0, Math.floor(num('AT_COOLDOWN_MS', 120_000))),
     // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等
     thinkDelayMinMs: Math.max(0, Math.floor(num('THINK_DELAY_MIN_MS', 800))),
     thinkDelayMaxMs: Math.max(0, Math.floor(num('THINK_DELAY_MAX_MS', 2200))),

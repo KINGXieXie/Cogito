@@ -22,6 +22,7 @@ import { shouldRecall, buildRecallNote } from './contextRecall.js'
 import { extractSticker, stickerHint, stickerCq, matchEmotionTag, findStickerByTag } from './stickers.js'
 import { createTopicTracker } from './stickerTopics.js'
 import { isBookTopic } from './bookTopics.js'
+import { applyMentions } from './mentions.js'
 import { createStickerScheduler } from './stickerScheduler.js'
 import { guardExclusiveNickname } from './nameGuard.js'
 import { targetsOwner, pickDefenseLine } from './defense.js'
@@ -326,6 +327,8 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
   })
   const lastProactive = new Map() // 白名单群主动搭话冷却：groupId -> 上次时间戳
   const lastBookJoin = new Map() // 书籍/文学话题主动接话冷却：groupId -> 上次时间戳
+  const lastAt = new Map() // 自动 @ 的群冷却：groupId -> 上次时间戳
+  const memberCache = new Map() // 群成员缓存：groupId -> { list, at }（取 @ 名字时用）
   const lastPoke = new Map() // 拍一拍回应冷却：会话 key -> 上次时间戳
   // 最近一次 /id_check 的结果：groupId -> { group_id, at, bad, kicked }
   // 只活在内存里（5 分钟有效期）：机器人一重启就作废，踢人指令会静默失效 —— 这是安全方向
@@ -419,6 +422,22 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
       }
     }
     return true
+  }
+
+  /** 群成员缓存 5 分钟：[@名字] 需要把名字解析成 QQ 号 */
+  async function getMembersCached(groupId) {
+    const key = Number(groupId)
+    const cached = memberCache.get(key)
+    if (cached && Date.now() - cached.at < 5 * 60_000) return cached.list
+    try {
+      const list = await onebot.getGroupMemberList(key)
+      const safe = Array.isArray(list) ? list : []
+      memberCache.set(key, { list: safe, at: Date.now() })
+      return safe
+    } catch (err) {
+      logger.warn(`[提及] 拉取群成员失败（本次不解析名字）：${err.message}`)
+      return cached?.list || []
+    }
   }
 
   async function sendTo(evt, text) {
@@ -1197,6 +1216,7 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         shapeHint(plan) +
         decorationHint(allowDecoration, decoKind, decorationPreset) +
         (config.stickerEnabled ? stickerHint(stickers) : '') +
+        (config.atEnabled && !isPrivate ? '\n\n【@ 人（可选）】群里想具体叫某个人时，可以在回复开头写 [at:对方]（指刚才说话的人）或 [at:名字]；系统会换成真 @。别滥用、别 @ 全体，@ 了就要真的在跟对方说话。' : '') +
         (bookJoin ? '\n\n【本条是书籍/文学话题（你可以自然接一句）】群友在聊书、作家、诗或小说：说一两句你记得的细节或自己的感受就好，别列书单、别科普、别抢话。语气照旧，一条一条慢慢说。' : '')
       // 旧事检索：只在消息里出现"上次/记得/之前"这类回忆词时才去翻记录，平时不花 token
       if (config.recallEnabled && groupId && typeof recall === 'function' && shouldRecall(parsed.text)) {
@@ -1316,6 +1336,26 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         // Markdown/分析文体残留清理（`**加粗**`、`### 标题`、`1. 编号`）——所有回复都过，
         // 因为发到群里它们就是字面的星号和井号，很难看
         reply = stripReportScaffold(reply)
+        // @ 人：模型可用 [at:对方] / [at:名字]；回答问句时可低概率自动 @ 提问者
+        if (config.atEnabled && !isPrivate) {
+          if (/\[at\s*[:：]/i.test(reply)) {
+            const members = /\[at\s*[:：]\s*(?:对方|你|ta|他|她)\s*\]/i.test(reply) ? [] : await getMembersCached(groupId)
+            const applied = applyMentions(reply, {
+              speakerId: evt.user_id, speakerName: senderName, members,
+              selfId: onebot.selfId, allowAll: false,
+            })
+            reply = applied.text
+            if (applied.mentions.length) logger.info(`[提及] @${applied.mentions.join(',')}`)
+          } else if (directReply && (config.atAutoRate || 0) > 0 &&
+            /[?？]|吗|呢|怎么|什么|哪|多少|为什么/.test(parsed.text)) {
+            const last = lastAt.get(Number(groupId)) || 0
+            if (Date.now() - last >= (config.atCooldownMs || 0) && rand() < config.atAutoRate) {
+              reply = `[CQ:at,qq=${evt.user_id}] ${reply}`
+              lastAt.set(Number(groupId), Date.now())
+              logger.info(`[提及] 自动 @ 提问者 ${evt.user_id}`)
+            }
+          }
+        }
         // 专属称呼：不是本人发的话，把"当面叫老登"换成"你"，避免把称呼喊到别人身上
         reply = guardExclusiveNickname(reply, { term: config.exclusiveNickname, speakerId: evt.user_id, ownerUserId: config.ownerUserId })
         // 表情包标记：模型在回复末尾写 [表情:标签]，先摘出来，正文照常裁剪

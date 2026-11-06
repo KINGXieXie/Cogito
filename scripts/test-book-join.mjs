@@ -14,7 +14,7 @@ const dir = mkdtempSync(path.join(tmpdir(), 'cogito-bookjoin-'))
 const logger = { info() {}, warn() {}, debug() {}, error() {} }
 const group = 200000002, selfId = '200000010', user = 200000011
 
-async function run(configPatch, text) {
+async function run(configPatch, text, replyText = '唔……三体我读过，黑暗森林那段最难忘。') {
   let time = Math.floor(Date.now() / 1000) * 1000
   const timeline = new MessageTimeline({ now: () => time })
   timeline.begin()
@@ -36,12 +36,12 @@ async function run(configPatch, text) {
     emojiKeepRate: 0, replyLengthMatch: true, maxTokens: 100, rateLimitPerHour: 100, rateLimitAtPerHour: 100,
     rateLimitMinGapMs: 0, rateLimitWaitMaxMs: 0, historyLimit: 10, historyLimitDirect: 10, stickerEnabled: false,
     recallEnabled: false, longMemoryEnabled: false, defenseEnabled: false, bookJoinEnabled: true, bookJoinRate: 1,
-    bookJoinCooldownMs: 0, typingPerCharMs: 0, typingMaxMs: 1000, timeframe: 'test',
+    bookJoinCooldownMs: 0, typingPerCharMs: 0, typingMaxMs: 1000, atEnabled: true, atAutoRate: 0, timeframe: 'test',
     ...configPatch,
   }
   const bot = createBot({
     config: base, logger, onebot, memory, chatSettings: null, rateLimiter: null,
-    llm: { async chat(...args) { requests.push(args); return '唔……三体我读过，黑暗森林那段最难忘。' } },
+    llm: { async chat(...args) { requests.push(args); return replyText } },
     buildSystemPrompt: () => '你是思思',
     rand: () => 0.5,
   })
@@ -72,6 +72,10 @@ try {
   // 4) 安静时段：不越权接话
   const d = await run({ quietHours: '00:00-23:59' }, '最近在读三体，太好看了')
   assert.equal(d.sent.length, 0, '安静时段不能主动接话')
+
+  // 5) @ 人：模型写 [at:对方] 应换成真 @ 当前说话人
+  const e = await run({}, '最近在读三体，太好看了', '[at:对方] 唔……我也读过，结局挺难受的。')
+  assert.ok(e.sent.some((t) => t.includes('[CQ:at,qq=200000011]')), `应包含 @ 提问者：${JSON.stringify(e.sent)}`)
 
   console.log('test-book-join passed')
 } finally {

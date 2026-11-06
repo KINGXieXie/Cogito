@@ -35,6 +35,7 @@ const scripts = [
   'test-book-topics.mjs',
   'test-typing-pace.mjs',
   'test-book-join.mjs',
+  'test-mentions.mjs',
   'test-persona-memory.mjs',
   'test-long-memory-budget.mjs',
   'test-private-profiles.mjs',
