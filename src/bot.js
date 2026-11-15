@@ -24,6 +24,7 @@ import { createTopicTracker } from './stickerTopics.js'
 import { isBookTopic } from './bookTopics.js'
 import { applyMentions } from './mentions.js'
 import { shouldDopeyJoke, dopeyHint } from './dopeyJoke.js'
+import { checkAnswer, tooSimilar } from './replyCheck.js'
 import { createStickerScheduler } from './stickerScheduler.js'
 import { guardExclusiveNickname } from './nameGuard.js'
 import { targetsOwner, pickDefenseLine } from './defense.js'
@@ -343,6 +344,7 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
     logger,
   })
   const lastProactive = new Map() // 白名单群主动搭话冷却：groupId -> 上次时间戳
+  const lastReplyText = new Map() // 会话 -> { text, at }：复读检测用
   const lastBookJoin = new Map() // 书籍/文学话题主动接话冷却：groupId -> 上次时间戳
   const lastAt = new Map() // 自动 @ 的群冷却：groupId -> 上次时间戳
   const memberCache = new Map() // 群成员缓存：groupId -> { list, at }（取 @ 名字时用）
@@ -1379,6 +1381,36 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         }
         // 专属称呼：不是本人发的话，把"当面叫老登"换成"你"，避免把称呼喊到别人身上
         reply = guardExclusiveNickname(reply, { term: config.exclusiveNickname, speakerId: evt.user_id, ownerUserId: config.ownerUserId })
+        // 复读检测：和本会话上一条几乎一样 → 换一种说法（只重写一次）
+        if (config.duplicateGuardEnabled) {
+          const prev = lastReplyText.get(key)
+          if (prev && Date.now() - prev.at < config.duplicateWindowMs && tooSimilar(prev.text, reply)) {
+            logger.info('[复读] 与本会话上一条回复几乎相同，换一种说法')
+            try {
+              const retry = await llm.chat(
+                `${systemPrompt}\n\n【换个说法】你刚才已经说过几乎一样的话，这次换一种表达，意思可以保持，但用词和句式要变。`,
+                [...baseHistory, { role: 'user', content }],
+              )
+              const cleaned = guardExclusiveNickname(stripReportScaffold(stripInternalReplyMetadata(retry || '')), { term: config.exclusiveNickname, speakerId: evt.user_id, ownerUserId: config.ownerUserId })
+              if (cleaned) reply = cleaned
+            } catch (err) { logger.warn(`[复读] 重写失败，按原回复发送：${err.message}`) }
+          }
+        }
+        // 回复自检：只对"直接对话 + 无图"的回复做一次低成本检查；不通过就重写一次
+        if (config.selfCheckEnabled && directReply && !hasImages && measureText(parsed.text) >= 2) {
+          try {
+            const verdict = await checkAnswer({ llm, question: parsed.text, reply })
+            if (!verdict.ok) {
+              logger.info(`[自检] 不通过（${verdict.reason}），重写一次`)
+              const retry = await llm.chat(
+                `${systemPrompt}\n\n【自检不通过：${verdict.reason}】请重写这条回复：第一句就直接回答对方这句话，不要答非所问，也不要先感慨。`,
+                [...baseHistory, { role: 'user', content }],
+              )
+              const cleaned = guardExclusiveNickname(stripReportScaffold(stripInternalReplyMetadata(retry || '')), { term: config.exclusiveNickname, speakerId: evt.user_id, ownerUserId: config.ownerUserId })
+              if (cleaned) reply = cleaned
+            }
+          } catch (err) { logger.warn(`[自检] 失败，按原回复发送：${err.message}`) }
+        }
         // 表情包标记：模型在回复末尾写 [表情:标签]，先摘出来，正文照常裁剪
         let sticker = null
         if (config.stickerEnabled && stickers.length) {
@@ -1438,6 +1470,7 @@ export function createBot({ config, logger, onebot, llm, visionLLM, imageCache: 
         finalLines = await sendReplyLines(evt, finalLines, key, { directReply, perHourLimit: hourCap, canSend: canContinue })
         if (!finalLines.length || !samePersona()) return
         record = finalLines.join('\n')
+        try { lastReplyText.set(key, { text: reply, at: Date.now() }) } catch { }
         if (!pushed) memory.push(key, 'user', content, userMeta)
         memory.push(key, 'assistant', record, { replyToUserId: evt.user_id,
           replyToName: senderName, replyToMessageId: evt.message_id })

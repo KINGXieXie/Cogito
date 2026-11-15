@@ -338,6 +338,11 @@ export function loadConfig() {
     atCooldownMs: Math.max(0, Math.floor(num('AT_COOLDOWN_MS', 120_000))),
     // 偶尔开一个呆呆的玩笑（概率；0=完全不使用）
     dopeyJokeRate: Math.min(1, Math.max(0, num('DOPEY_JOKE_RATE', 0.15))),
+    // 回复自检：直接对话生成后，再用一次小调用判断"有没有答到点上"
+    selfCheckEnabled: String(env.SELF_CHECK_ENABLED ?? '1').toLowerCase() !== '0' && String(env.SELF_CHECK_ENABLED ?? '1').toLowerCase() !== 'false',
+    // 复读检测：与本会话上一条回复几乎一样时换一种说法
+    duplicateGuardEnabled: String(env.DUPLICATE_GUARD_ENABLED ?? '1').toLowerCase() !== '0' && String(env.DUPLICATE_GUARD_ENABLED ?? '1').toLowerCase() !== 'false',
+    duplicateWindowMs: Math.max(60_000, Math.floor(num('DUPLICATE_WINDOW_MS', 30 * 60_000))),
     // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等
     thinkDelayMinMs: Math.max(0, Math.floor(num('THINK_DELAY_MIN_MS', 800))),
     thinkDelayMaxMs: Math.max(0, Math.floor(num('THINK_DELAY_MAX_MS', 2200))),

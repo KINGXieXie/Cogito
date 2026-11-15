@@ -38,6 +38,7 @@ const scripts = [
   'test-mentions.mjs',
   'test-dopey-joke.mjs',
   'test-focus-note.mjs',
+  'test-self-check.mjs',
   'test-persona-memory.mjs',
   'test-long-memory-budget.mjs',
   'test-private-profiles.mjs',
