@@ -346,6 +346,9 @@ export function loadConfig() {
     // 会话线程摘要：把最近 N 轮"对方说→你答"压成一行放进提示词
     threadSummaryEnabled: String(env.THREAD_SUMMARY_ENABLED ?? '1').toLowerCase() !== '0' && String(env.THREAD_SUMMARY_ENABLED ?? '1').toLowerCase() !== 'false',
     threadSummaryTurns: Math.min(5, Math.max(1, Math.floor(num('THREAD_SUMMARY_TURNS', 2)))),
+    // 语气分级（老板/管理/熟人/陌生人）与情绪镜像
+    toneTiersEnabled: String(env.TONE_TIERS_ENABLED ?? '1').toLowerCase() !== '0' && String(env.TONE_TIERS_ENABLED ?? '1').toLowerCase() !== 'false',
+    familiarMinSeen: Math.max(1, Math.floor(num('FAMILIAR_MIN_SEEN', 4))),
     // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等
     thinkDelayMinMs: Math.max(0, Math.floor(num('THINK_DELAY_MIN_MS', 800))),
     thinkDelayMaxMs: Math.max(0, Math.floor(num('THINK_DELAY_MAX_MS', 2200))),

@@ -40,6 +40,7 @@ const scripts = [
   'test-focus-note.mjs',
   'test-self-check.mjs',
   'test-thread-summary.mjs',
+  'test-tone-tiers.mjs',
   'test-persona-memory.mjs',
   'test-long-memory-budget.mjs',
   'test-private-profiles.mjs',

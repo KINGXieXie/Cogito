@@ -36,7 +36,7 @@ async function run(configPatch, text, replyText = '唔……三体我读过，�
     emojiKeepRate: 0, replyLengthMatch: true, maxTokens: 100, rateLimitPerHour: 100, rateLimitAtPerHour: 100,
     rateLimitMinGapMs: 0, rateLimitWaitMaxMs: 0, historyLimit: 10, historyLimitDirect: 10, stickerEnabled: false,
     recallEnabled: false, longMemoryEnabled: false, defenseEnabled: false, bookJoinEnabled: true, bookJoinRate: 1,
-    bookJoinCooldownMs: 0, typingPerCharMs: 0, typingMaxMs: 1000, atEnabled: true, atAutoRate: 0, timeframe: 'test',
+    bookJoinCooldownMs: 0, typingPerCharMs: 0, typingMaxMs: 1000, atEnabled: true, atAutoRate: 0, toneTiersEnabled: true, ownerUserId: '', familiarMinSeen: 4, timeframe: 'test',
     ...configPatch,
   }
   const bot = createBot({
@@ -60,6 +60,7 @@ try {
   const a = await run({}, '最近在读三体，太好看了')
   assert.ok(a.requests.length >= 1, '应该调用模型生成接话')
   assert.ok(String(a.requests[0][0]).includes('你现在要接的话'), '提示词应包含上下文焦点块')
+  assert.ok(String(a.requests[0][0]).includes('说话对象与当下情绪'), '提示词应包含语气分级提示')
   assert.ok(a.sent.length >= 1, '应该发出消息')
 
   // 2) 普通闲聊：不接话
