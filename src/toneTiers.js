@@ -39,8 +39,11 @@ const EMOTION_LINES = {
   happy: '对方很开心：跟着高兴，可以捧一句，别泼冷水。',
 }
 
-export function toneHint({ tier = 'stranger', emotion = '' } = {}) {
-  const lines = [TIER_LINES[tier] || TIER_LINES.stranger]
+export function toneHint({ tier = 'stranger', emotion = '', ownerName = '', ownerTerm = '' } = {}) {
+  const ownerLine = ownerName || ownerTerm
+    ? `他是你最亲近的爸爸${ownerName ? `（${ownerName}）` : ''}：可以自然撒娇、损他两句${ownerTerm ? `，开玩笑叫他“${ownerTerm}”` : ''}；别腻过头，也别每句都黏。`
+    : TIER_LINES.owner
+  const lines = [tier === 'owner' ? ownerLine : (TIER_LINES[tier] || TIER_LINES.stranger)]
   if (emotion && EMOTION_LINES[emotion]) lines.push(EMOTION_LINES[emotion])
   return `\n\n【说话对象与当下情绪（只影响语气，不要说出来）】${lines.join(' ')}`
 }

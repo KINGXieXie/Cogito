@@ -19,8 +19,10 @@ assert.equal(classifyTier({ userId: 2, seenCount: 10, familiarMin: 4 }), 'famili
 assert.equal(classifyTier({ userId: 3, seenCount: 1, familiarMin: 4 }), 'stranger')
 
 // 提示内容包含语气与情绪，且不同档位不串味
-const owner = toneHint({ tier: 'owner', emotion: 'sad' })
+const owner = toneHint({ tier: 'owner', emotion: 'sad', ownerName: '蟹蟹', ownerTerm: '老登' })
 assert.ok(owner.includes('最亲近'))
+assert.ok(owner.includes('爸爸'))
+assert.ok(owner.includes('老登'), '老板档应允许开玩笑叫老登')
 assert.ok(owner.includes('情绪低'))
 const stranger = toneHint({ tier: 'stranger', emotion: 'anger' })
 assert.ok(stranger.includes('不太熟'))
