@@ -32,7 +32,7 @@ assert.equal((await checkAnswer({ llm: { async chat() { throw Error('x') } }, qu
 const dir = mkdtempSync(path.join(tmpdir(), 'cogito-selfcheck-'))
 const logger = { info() {}, warn() {}, debug() {}, error() {} }
 const group = 200000002, selfId = '200000010', user = 200000011
-function harness({ selfCheckEnabled, duplicateGuardEnabled, replyFor }) {
+function harness({ selfCheckEnabled, duplicateGuardEnabled, threadSummaryEnabled = false, replyFor }) {
   const time = Math.floor(Date.now() / 1000) * 1000
   const timeline = new MessageTimeline({ now: () => time }); timeline.begin()
   const memory = new MemoryStore({ file: path.join(dir, `m${Math.random()}.json`), limit: 50, logger })
@@ -53,7 +53,7 @@ function harness({ selfCheckEnabled, duplicateGuardEnabled, replyFor }) {
     rateLimitMinGapMs: 0, rateLimitWaitMaxMs: 0, historyLimit: 10, historyLimitDirect: 10, stickerEnabled: false,
     recallEnabled: false, longMemoryEnabled: false, defenseEnabled: false, bookJoinEnabled: false, atEnabled: false,
     typingPerCharMs: 0, typingMaxMs: 500, understandEnabled: false, selfCheckEnabled, duplicateGuardEnabled,
-    duplicateWindowMs: 30 * 60_000, dopeyJokeRate: 0,
+    duplicateWindowMs: 30 * 60_000, dopeyJokeRate: 0, threadSummaryEnabled, threadSummaryTurns: 2,
   }
   const bot = createBot({
     config, logger, onebot, memory, chatSettings: null, rateLimiter: null,
@@ -100,6 +100,15 @@ try {
   await b.send('人呢')
   assert.equal(b.calls.some((p) => p.includes('换个说法')), true, '应触发换说法')
   assert.ok(b.sent.some((t) => t.includes('我在呢')), `应发出改写后的回复：${JSON.stringify(b.sent)}`)
+
+  // 会话线程摘要：第二轮生成时，提示词里应带上上一轮
+  const c = harness({
+    selfCheckEnabled: false, duplicateGuardEnabled: false, threadSummaryEnabled: true,
+    replyFor: () => '在的呀，怎么啦',
+  })
+  await c.send('在吗')
+  await c.send('人呢')
+  assert.ok(c.calls.some((p) => p.includes('你们刚才在聊')), '第二轮应带线程摘要')
 
   console.log('test-self-check passed')
 } finally {

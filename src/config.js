@@ -343,6 +343,9 @@ export function loadConfig() {
     // 复读检测：与本会话上一条回复几乎一样时换一种说法
     duplicateGuardEnabled: String(env.DUPLICATE_GUARD_ENABLED ?? '1').toLowerCase() !== '0' && String(env.DUPLICATE_GUARD_ENABLED ?? '1').toLowerCase() !== 'false',
     duplicateWindowMs: Math.max(60_000, Math.floor(num('DUPLICATE_WINDOW_MS', 30 * 60_000))),
+    // 会话线程摘要：把最近 N 轮"对方说→你答"压成一行放进提示词
+    threadSummaryEnabled: String(env.THREAD_SUMMARY_ENABLED ?? '1').toLowerCase() !== '0' && String(env.THREAD_SUMMARY_ENABLED ?? '1').toLowerCase() !== 'false',
+    threadSummaryTurns: Math.min(5, Math.max(1, Math.floor(num('THREAD_SUMMARY_TURNS', 2)))),
     // 被@/私聊时"先想一想"的停顿（毫秒）；0 表示不等
     thinkDelayMinMs: Math.max(0, Math.floor(num('THINK_DELAY_MIN_MS', 800))),
     thinkDelayMaxMs: Math.max(0, Math.floor(num('THINK_DELAY_MAX_MS', 2200))),
