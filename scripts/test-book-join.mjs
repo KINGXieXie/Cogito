@@ -59,6 +59,7 @@ try {
   // 1) 书籍话题：没被@也接话
   const a = await run({}, '最近在读三体，太好看了')
   assert.ok(a.requests.length >= 1, '应该调用模型生成接话')
+  assert.ok(String(a.requests[0][0]).includes('你现在要接的话'), '提示词应包含上下文焦点块')
   assert.ok(a.sent.length >= 1, '应该发出消息')
 
   // 2) 普通闲聊：不接话
